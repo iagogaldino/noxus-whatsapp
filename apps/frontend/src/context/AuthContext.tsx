@@ -35,6 +35,7 @@ function buildSession(token: string, user: AuthUser): AuthSession {
     name: user.name,
     role: user.role,
     department: user.department,
+    sectorId: user.sectorId ?? null,
     loggedInAt: new Date().toISOString(),
   };
 }

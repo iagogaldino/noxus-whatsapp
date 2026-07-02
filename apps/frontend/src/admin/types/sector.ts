@@ -5,6 +5,7 @@ export interface Sector {
   name: string;
   description: string;
   status: SectorStatus;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }

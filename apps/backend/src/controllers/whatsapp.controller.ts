@@ -33,6 +33,14 @@ const forwardConversationSchema = z.object({
   sectorId: z.string().min(1),
 });
 
+async function getConversationViewer(userId: string): Promise<chatPersistence.ConversationViewer> {
+  const user = await User.findById(userId).select('role sectorId').lean();
+  return {
+    role: user?.role ?? 'employee',
+    sectorId: user?.sectorId ? String(user.sectorId) : null,
+  };
+}
+
 async function getInstanceId(req: Request): Promise<string> {
   const paramId = req.params.id;
   if (paramId) return paramId;
@@ -128,13 +136,10 @@ export async function listConversations(
   try {
     const instanceId = await saasWhatsApp.resolveInstanceId();
     const limit = req.query.limit ? Number(req.query.limit) : 200;
-    const user = await User.findById(req.auth!.userId).select('role sectorId').lean();
+    const viewer = await getConversationViewer(req.auth!.userId);
     const conversations = await saasWhatsApp.getConversations(instanceId, {
       limit,
-      viewer: {
-        role: user?.role ?? 'employee',
-        sectorId: user?.sectorId ? String(user.sectorId) : null,
-      },
+      viewer,
     });
     res.json({ items: conversations });
   } catch (err) {
@@ -150,6 +155,8 @@ export async function forwardConversation(
   try {
     const body = forwardConversationSchema.parse(req.body ?? {});
     const instanceId = await saasWhatsApp.resolveInstanceId();
+    const viewer = await getConversationViewer(req.auth!.userId);
+    await chatPersistence.assertConversationAccess(instanceId, req.params.chatId, viewer);
     const result = await chatPersistence.forwardConversation(
       instanceId,
       req.params.chatId,
@@ -173,6 +180,9 @@ export async function getConversationMessages(
     const jid = req.params.jid;
     const limit = req.query.limit ? Number(req.query.limit) : 20;
     const beforeMessageId = req.query.beforeMessageId as string | undefined;
+    const viewer = await getConversationViewer(req.auth!.userId);
+
+    await chatPersistence.assertConversationAccess(instanceId, jid, viewer);
 
     if (!beforeMessageId) {
       await syncConversationFromSaas(instanceId, jid, Math.max(limit, 50));
@@ -193,6 +203,7 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
   try {
     const body = sendMessageSchema.parse(req.body);
     const instanceId = await saasWhatsApp.resolveInstanceId();
+    const viewer = await getConversationViewer(req.auth!.userId);
 
     const phoneNumber =
       body.phoneNumber && saasWhatsApp.normalizePhone(body.phoneNumber).length >= 10
@@ -202,6 +213,10 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     const chatId = body.chatId?.trim()
       ? chatPersistence.normalizeChatId(body.chatId)
       : phoneNumber;
+
+    if (body.chatId?.trim()) {
+      await chatPersistence.assertConversationAccess(instanceId, chatId, viewer);
+    }
 
     await saasWhatsApp.sendMessage(instanceId, phoneNumber, body.message);
 
@@ -249,6 +264,7 @@ export async function sendMedia(req: Request, res: Response, next: NextFunction)
     }
 
     const instanceId = await saasWhatsApp.resolveInstanceId();
+    const viewer = await getConversationViewer(req.auth!.userId);
     const phoneNumber =
       saasWhatsApp.normalizePhone(phoneNumberRaw).length >= 10
         ? saasWhatsApp.normalizePhone(phoneNumberRaw)
@@ -257,6 +273,10 @@ export async function sendMedia(req: Request, res: Response, next: NextFunction)
     const resolvedChatId = chatId
       ? chatPersistence.normalizeChatId(chatId)
       : phoneNumber;
+
+    if (chatId) {
+      await chatPersistence.assertConversationAccess(instanceId, resolvedChatId, viewer);
+    }
 
     await saasWhatsApp.sendMedia(
       instanceId,

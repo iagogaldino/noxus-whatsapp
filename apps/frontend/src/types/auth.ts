@@ -6,6 +6,7 @@ export interface AuthUser {
   name: string;
   role: EmployeeRole;
   department?: string;
+  sectorId?: string | null;
 }
 
 export interface AuthLoginResponse {
@@ -24,6 +25,7 @@ export interface AuthSession {
   name: string;
   role: EmployeeRole;
   department?: string;
+  sectorId?: string | null;
   loggedInAt: string;
 }
 

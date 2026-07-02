@@ -71,7 +71,7 @@ interface ChatContextValue {
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { session } = useAuth();
+  const { session, isAdmin } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
@@ -80,6 +80,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loadingChatIds, setLoadingChatIds] = useState<Set<string>>(() => new Set());
   const loadedChatsRef = useRef<Set<string>>(new Set());
   const draftChatIdsRef = useRef<Set<string>>(new Set());
+  const conversationsRef = useRef<Conversation[]>([]);
+
+  useEffect(() => {
+    conversationsRef.current = conversations;
+  }, [conversations]);
 
   const currentUser = useMemo<User>(
     () => ({
@@ -148,6 +153,46 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, []);
 
+  const refreshConversations = useCallback(async () => {
+    if (!session) return;
+
+    try {
+      const { items } = await fetchConversations();
+      const convs: Conversation[] = items.map((item) => {
+        const lastMessage = mapApiMessageToChat(item.lastMessage, currentUser.id);
+        return {
+          id: item.chatId,
+          participant: {
+            id: item.chatId,
+            name: item.participantName,
+            avatarColor: pickAvatarColor(item.chatId),
+          },
+          lastMessage,
+          unreadCount: 0,
+          assignedSector: item.assignedSector ?? null,
+        };
+      });
+
+      setConversations(convs);
+      setMessagesByChat((prev) => {
+        const next = { ...prev };
+        for (const item of items) {
+          const message = mapApiMessageToChat(item.lastMessage, currentUser.id);
+          const existing = next[item.chatId] ?? [];
+          if (!existing.some((m) => m.id === message.id)) {
+            next[item.chatId] = [...existing, message];
+          }
+        }
+        return next;
+      });
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao carregar conversas.';
+      setError(message);
+      setConversations([]);
+    }
+  }, [session, currentUser.id]);
+
   const handleIncoming = useCallback(
     (event: ChatMessageReceivedEvent) => {
       const message: Message = {
@@ -185,6 +230,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       appendMessage(message);
     },
     [appendMessage],
+  );
+
+  const handleEmployeeIncoming = useCallback(
+    (event: ChatMessageReceivedEvent) => {
+      const message: Message = {
+        id: event.id,
+        chatId: event.chatId,
+        text: event.text,
+        senderId: event.senderId,
+        timestamp: new Date(event.timestamp),
+        status: 'delivered',
+        type: 'text',
+      };
+
+      if (conversationsRef.current.some((conversation) => conversation.id === event.chatId)) {
+        appendMessage(message);
+      }
+
+      void refreshConversations();
+    },
+    [appendMessage, refreshConversations],
   );
 
   const handleSent = useCallback((event: ChatMessageSentEvent) => {
@@ -241,46 +307,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
-  const refreshConversations = useCallback(async () => {
-    if (!session) return;
-
-    try {
-      const { items } = await fetchConversations();
-      const convs: Conversation[] = items.map((item) => {
-        const lastMessage = mapApiMessageToChat(item.lastMessage, currentUser.id);
-        return {
-          id: item.chatId,
-          participant: {
-            id: item.chatId,
-            name: item.participantName,
-            avatarColor: pickAvatarColor(item.chatId),
-          },
-          lastMessage,
-          unreadCount: 0,
-          assignedSector: item.assignedSector ?? null,
-        };
-      });
-
-      setConversations(convs);
-      setMessagesByChat((prev) => {
-        const next = { ...prev };
-        for (const item of items) {
-          const message = mapApiMessageToChat(item.lastMessage, currentUser.id);
-          const existing = next[item.chatId] ?? [];
-          if (!existing.some((m) => m.id === message.id)) {
-            next[item.chatId] = [...existing, message];
-          }
-        }
-        return next;
-      });
-      setError(null);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erro ao carregar conversas.';
-      setError(message);
-      setConversations([]);
-    }
-  }, [session, currentUser.id]);
-
   useEffect(() => {
     if (!session) {
       setIsLoading(false);
@@ -304,7 +330,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     void bootstrap();
 
-    const unsubReceived = chatSocket.onMessageReceived(handleIncoming);
+    const unsubReceived = chatSocket.onMessageReceived((event) => {
+      if (isAdmin) {
+        handleIncoming(event);
+        return;
+      }
+      handleEmployeeIncoming(event);
+    });
     const unsubSent = chatSocket.onMessageSent(handleSent);
     const unsubForwarded = chatSocket.onConversationForwarded(() => {
       void refreshConversations();
@@ -317,7 +349,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubForwarded();
       chatSocket.disconnect();
     };
-  }, [session, refreshConversations, handleIncoming, handleSent]);
+  }, [session, isAdmin, refreshConversations, handleIncoming, handleEmployeeIncoming, handleSent]);
 
   const filteredConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();

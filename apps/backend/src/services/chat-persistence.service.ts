@@ -2,7 +2,7 @@ import { Types } from 'mongoose';
 import { ChatConversation } from '../models/ChatConversation.js';
 import { ChatMessage } from '../models/ChatMessage.js';
 import { AppError } from '../middleware/error.middleware.js';
-import { getActiveSectorById } from './sector.service.js';
+import { getActiveSectorById, getDefaultSector } from './sector.service.js';
 import type {
   SaasConversationMessage,
   SaasConversationMessagesResponse,
@@ -119,6 +119,8 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
 
   const existing = await ChatConversation.findOne({ instanceId: input.instanceId, chatId });
   const resolvedPhone = phoneFromChatId(chatId) ?? existing?.phoneNumber;
+  const needsDefaultSector = !existing || !existing.assignedSectorId;
+  const defaultSector = needsDefaultSector ? await getDefaultSector() : null;
 
   if (!existing || timestamp >= existing.lastMessageAt) {
     await ChatConversation.findOneAndUpdate(
@@ -135,9 +137,17 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
         lastMessageText: input.text,
         lastMessageFromMe: input.fromMe,
         ...(resolvedPhone ? { phoneNumber: resolvedPhone } : {}),
+        ...(defaultSector ? { assignedSectorId: defaultSector.objectId } : {}),
       },
       { upsert: true, new: true },
     );
+  } else if (needsDefaultSector && defaultSector) {
+    existing.assignedSectorId = defaultSector.objectId;
+    if (input.participantName && existing.participantName === existing.chatId) {
+      existing.participantName = input.participantName;
+    }
+    if (resolvedPhone) existing.phoneNumber = resolvedPhone;
+    await existing.save();
   } else if (input.participantName && existing.participantName === existing.chatId) {
     existing.participantName = input.participantName;
     if (resolvedPhone) existing.phoneNumber = resolvedPhone;
@@ -221,6 +231,34 @@ export interface ConversationViewer {
   sectorId?: string | null;
 }
 
+export async function assertConversationAccess(
+  instanceId: string,
+  chatId: string,
+  viewer: ConversationViewer,
+): Promise<void> {
+  if (viewer.role === 'admin') return;
+
+  if (!viewer.sectorId || !Types.ObjectId.isValid(viewer.sectorId)) {
+    throw new AppError(403, 'Acesso restrito ao setor.');
+  }
+
+  const doc = await ChatConversation.findOne({
+    instanceId,
+    chatId: normalizeChatId(chatId),
+  })
+    .select('assignedSectorId')
+    .lean();
+
+  if (!doc) {
+    throw new AppError(404, 'Conversa não encontrada.');
+  }
+
+  const assignedSectorId = doc.assignedSectorId ? String(doc.assignedSectorId) : null;
+  if (assignedSectorId !== viewer.sectorId) {
+    throw new AppError(403, 'Acesso restrito ao setor.');
+  }
+}
+
 export async function listConversations(
   instanceId: string,
   limit = 200,
@@ -231,15 +269,10 @@ export async function listConversations(
   const filter: Record<string, unknown> = { instanceId };
 
   if (viewer && viewer.role !== 'admin') {
-    const unassigned = [{ assignedSectorId: null }, { assignedSectorId: { $exists: false } }];
-
-    if (viewer.sectorId && Types.ObjectId.isValid(viewer.sectorId)) {
-      filter.$or = [
-        ...unassigned,
-        { assignedSectorId: new Types.ObjectId(viewer.sectorId) },
-      ];
+    if (!viewer.sectorId || !Types.ObjectId.isValid(viewer.sectorId)) {
+      filter.assignedSectorId = { $in: [] };
     } else {
-      filter.$or = unassigned;
+      filter.assignedSectorId = new Types.ObjectId(viewer.sectorId);
     }
   }
 

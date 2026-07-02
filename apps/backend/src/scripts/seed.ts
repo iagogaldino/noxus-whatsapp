@@ -1,10 +1,18 @@
 import 'dotenv/config';
 import { connectDb } from '../db/connect.js';
+import { ChatConversation } from '../models/ChatConversation.js';
 import { Sector } from '../models/Sector.js';
 import { User } from '../models/User.js';
 import { normalizePhone } from '../utils/phone.js';
 
+const DEFAULT_SECTOR = {
+  name: 'Geral',
+  description: 'Fila inicial de atendimento',
+  isDefault: true,
+};
+
 const seedSectors = [
+  DEFAULT_SECTOR,
   { name: 'Comercial', description: 'Vendas e atendimento comercial' },
   { name: 'TI', description: 'Tecnologia da informação' },
   { name: 'RH', description: 'Recursos humanos' },
@@ -57,21 +65,36 @@ const seedUsers = [
 async function seed() {
   await connectDb();
 
+  await Sector.updateMany({ isDefault: true, name: { $ne: DEFAULT_SECTOR.name } }, { isDefault: false });
+
   const sectorIds = new Map<string, string>();
 
   for (const sector of seedSectors) {
+    const isDefault = 'isDefault' in sector && sector.isDefault === true;
     const doc = await Sector.findOneAndUpdate(
       { name: sector.name },
       {
         name: sector.name,
         description: sector.description,
         status: 'active',
+        isDefault,
       },
       { upsert: true, new: true },
     );
 
     sectorIds.set(sector.name, String(doc._id));
-    console.log(`Seeded sector: ${sector.name}`);
+    console.log(`Seeded sector: ${sector.name}${isDefault ? ' (padrão)' : ''}`);
+  }
+
+  const geralId = sectorIds.get(DEFAULT_SECTOR.name);
+  if (geralId) {
+    const migration = await ChatConversation.updateMany(
+      {
+        $or: [{ assignedSectorId: null }, { assignedSectorId: { $exists: false } }],
+      },
+      { assignedSectorId: geralId },
+    );
+    console.log(`Migrated ${migration.modifiedCount} conversation(s) to setor Geral`);
   }
 
   for (const user of seedUsers) {

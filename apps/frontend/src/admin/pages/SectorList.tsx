@@ -82,7 +82,12 @@ const SectorList: React.FC = () => {
                   {filtered.map((sector) => (
                     <IonItem key={sector.id} className="admin-employee-item" lines="full">
                       <div className="admin-employee-item__main">
-                        <div className="admin-employee-item__name">{sector.name}</div>
+                        <div className="admin-employee-item__name">
+                          {sector.name}
+                          {sector.isDefault && (
+                            <span className="admin-badge admin-badge--default">Padrão</span>
+                          )}
+                        </div>
                         <div className="admin-employee-item__email">
                           {sector.description || 'Sem descrição'}
                         </div>
@@ -104,6 +109,7 @@ const SectorList: React.FC = () => {
                           fill="clear"
                           size="small"
                           color="danger"
+                          disabled={sector.isDefault}
                           onClick={() => setDeleteTarget(sector)}
                         >
                           <IonIcon icon={trashOutline} slot="icon-only" />
@@ -127,7 +133,12 @@ const SectorList: React.FC = () => {
                   <tbody>
                     {filtered.map((sector) => (
                       <tr key={sector.id}>
-                        <td className="admin-table__name">{sector.name}</td>
+                        <td className="admin-table__name">
+                          {sector.name}
+                          {sector.isDefault && (
+                            <span className="admin-badge admin-badge--default">Padrão</span>
+                          )}
+                        </td>
                         <td>{sector.description || '—'}</td>
                         <td>
                           <span className={`admin-badge admin-badge--${sector.status}`}>
@@ -148,6 +159,7 @@ const SectorList: React.FC = () => {
                               fill="clear"
                               size="small"
                               color="danger"
+                              disabled={sector.isDefault}
                               onClick={() => setDeleteTarget(sector)}
                             >
                               <IonIcon icon={trashOutline} slot="icon-only" />

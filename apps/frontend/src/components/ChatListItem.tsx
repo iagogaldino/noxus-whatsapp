@@ -2,6 +2,7 @@ import { IonItem } from '@ionic/react';
 import { Conversation } from '../types/chat';
 import { formatChatTime } from '../utils/format';
 import { getMessagePreview } from '../utils/message';
+import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import Avatar from './Avatar';
 
@@ -13,10 +14,12 @@ interface ChatListItemProps {
 
 const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onClick }) => {
   const { currentUser } = useChat();
+  const { isAdmin } = useAuth();
   const { participant, lastMessage, unreadCount, assignedSector } = conversation;
   const isSent = lastMessage.senderId === currentUser.id;
   const previewText = getMessagePreview(lastMessage);
   const preview = previewText ? (isSent ? `Você: ${previewText}` : previewText) : '';
+  const showSectorBadge = isAdmin;
 
   return (
     <IonItem
@@ -32,8 +35,10 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onC
           <div className="wa-chat-item__row">
             <span className="wa-chat-item__name">
               {participant.name}
-              {assignedSector && (
-                <span className="wa-sector-badge">{assignedSector.name}</span>
+              {showSectorBadge && (
+                <span className="wa-sector-badge">
+                  {assignedSector?.name ?? 'Geral'}
+                </span>
               )}
             </span>
             <span className="wa-chat-item__time">{formatChatTime(lastMessage.timestamp)}</span>

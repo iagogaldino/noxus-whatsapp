@@ -18,6 +18,11 @@ const sectorSchema = new Schema(
       enum: ['active', 'inactive'],
       default: 'active',
     },
+    isDefault: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
   },
   {
     timestamps: true,

@@ -30,6 +30,7 @@ const SectorForm: React.FC = () => {
   const isEdit = !!id && id !== 'new';
 
   const [form, setForm] = useState<SectorFormData>(emptyForm);
+  const [isDefaultSector, setIsDefaultSector] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,6 +39,7 @@ const SectorForm: React.FC = () => {
     if (isEdit && id) {
       const sector = getSectorById(id);
       if (sector) {
+        setIsDefaultSector(sector.isDefault);
         setForm({
           name: sector.name,
           description: sector.description,
@@ -89,6 +91,11 @@ const SectorForm: React.FC = () => {
             <h2 className="admin-form-card__title">
               {isEdit ? 'Editar dados' : 'Cadastrar setor'}
             </h2>
+            {isDefaultSector && (
+              <p className="admin-form-card__subtitle">
+                Este é o setor padrão. Chats novos e não encaminhados ficam nesta fila.
+              </p>
+            )}
 
             <form onSubmit={(e) => void handleSubmit(e)} className="admin-form">
               <IonItem className="admin-form-item">
@@ -117,6 +124,7 @@ const SectorForm: React.FC = () => {
                   value={form.status}
                   onIonChange={(e) => updateField('status', e.detail.value)}
                   interface="popover"
+                  disabled={isDefaultSector}
                 >
                   <IonSelectOption value="active">Ativo</IonSelectOption>
                   <IonSelectOption value="inactive">Inativo</IonSelectOption>

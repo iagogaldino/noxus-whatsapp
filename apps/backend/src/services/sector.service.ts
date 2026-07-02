@@ -9,6 +9,7 @@ export interface SectorDto {
   name: string;
   description: string;
   status: 'active' | 'inactive';
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -18,6 +19,7 @@ function toDto(doc: {
   name: string;
   description?: string;
   status: 'active' | 'inactive';
+  isDefault?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }): SectorDto {
@@ -26,14 +28,35 @@ function toDto(doc: {
     name: doc.name,
     description: doc.description ?? '',
     status: doc.status,
+    isDefault: doc.isDefault ?? false,
     createdAt: doc.createdAt?.toISOString() ?? new Date().toISOString(),
     updatedAt: doc.updatedAt?.toISOString() ?? new Date().toISOString(),
   };
 }
 
+export async function getDefaultSector(): Promise<{ id: string; objectId: Types.ObjectId; name: string }> {
+  const doc = await Sector.findOne({ isDefault: true, status: 'active' }).lean();
+  if (!doc) {
+    throw new AppError(500, 'Setor padrão não configurado.');
+  }
+
+  return {
+    id: String(doc._id),
+    objectId: doc._id as Types.ObjectId,
+    name: doc.name,
+  };
+}
+
+async function assertNotDefaultSector(id: string, action: string): Promise<void> {
+  const doc = await Sector.findById(id).select('isDefault').lean();
+  if (doc?.isDefault) {
+    throw new AppError(409, `Não é possível ${action} o setor padrão.`);
+  }
+}
+
 export async function listSectors(options: { includeInactive?: boolean } = {}): Promise<SectorDto[]> {
   const filter = options.includeInactive ? {} : { status: 'active' as const };
-  const docs = await Sector.find(filter).sort({ name: 1 }).lean();
+  const docs = await Sector.find(filter).sort({ isDefault: -1, name: 1 }).lean();
   return docs.map((doc) => toDto(doc));
 }
 
@@ -65,6 +88,7 @@ export async function createSector(input: {
     name,
     description: input.description?.trim() ?? '',
     status: input.status ?? 'active',
+    isDefault: false,
   });
 
   return toDto(doc);
@@ -80,6 +104,15 @@ export async function updateSector(
 ): Promise<SectorDto> {
   if (!Types.ObjectId.isValid(id)) {
     throw new AppError(400, 'ID de setor inválido.');
+  }
+
+  const current = await Sector.findById(id).lean();
+  if (!current) {
+    throw new AppError(404, 'Setor não encontrado.');
+  }
+
+  if (current.isDefault && input.status === 'inactive') {
+    throw new AppError(409, 'Não é possível inativar o setor padrão.');
   }
 
   if (input.name) {
@@ -111,6 +144,8 @@ export async function deleteSector(id: string): Promise<void> {
   if (!Types.ObjectId.isValid(id)) {
     throw new AppError(400, 'ID de setor inválido.');
   }
+
+  await assertNotDefaultSector(id, 'excluir');
 
   const sectorObjectId = new Types.ObjectId(id);
 

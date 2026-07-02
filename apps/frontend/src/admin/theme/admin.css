@@ -630,6 +630,17 @@
   color: #475569;
 }
 
+.admin-badge--default {
+  background: rgba(124, 77, 255, 0.12);
+  color: #7c4dff;
+  margin-left: 8px;
+}
+
+.admin-table__name .admin-badge--default {
+  margin-left: 8px;
+  vertical-align: middle;
+}
+
 .admin-employee-actions {
   display: flex;
   gap: 2px;

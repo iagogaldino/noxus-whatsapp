@@ -11,6 +11,7 @@ export interface PublicUser {
   name: string;
   role: 'admin' | 'employee';
   department?: string;
+  sectorId?: string | null;
 }
 
 function toPublicUser(user: {
@@ -19,6 +20,7 @@ function toPublicUser(user: {
   name: string;
   role: 'admin' | 'employee';
   department?: string | null;
+  sectorId?: { toString(): string } | null;
 }): PublicUser {
   return {
     id: user._id.toString(),
@@ -26,6 +28,7 @@ function toPublicUser(user: {
     name: user.name,
     role: user.role,
     department: user.department ?? undefined,
+    sectorId: user.sectorId ? user.sectorId.toString() : null,
   };
 }
 
