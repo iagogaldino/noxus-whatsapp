@@ -10,7 +10,7 @@ import type {
   SaasWhatsAppQrResponse,
   SaasWhatsAppStatusResponse,
 } from '../types/saas-whatsapp.js';
-import { listStoredConversations } from './conversation-store.js';
+import { listConversations as listPersistedConversations } from './chat-persistence.service.js';
 
 function ensureApiKey(): void {
   if (!env.SAAS_WHATSAPP_API_KEY) {
@@ -127,10 +127,10 @@ export async function getContacts(instanceId: string): Promise<SaasWhatsAppConta
 }
 
 export async function getConversations(
-  _instanceId: string,
+  instanceId: string,
   options: { limit?: number } = {},
 ): Promise<SaasConversationSummary[]> {
-  return listStoredConversations(options.limit ?? 200);
+  return listPersistedConversations(instanceId, options.limit ?? 200);
 }
 
 export async function getConversationMessages(
@@ -159,8 +159,9 @@ export async function sendMessage(
   });
 }
 
-export function normalizePhone(jidOrPhone: string): string {
-  const base = jidOrPhone.split('@')[0] ?? jidOrPhone;
+export function normalizePhone(jidOrPhone: string | number): string {
+  const raw = String(jidOrPhone ?? '');
+  const base = raw.split('@')[0] ?? raw;
   return base.replace(/\D/g, '');
 }
 

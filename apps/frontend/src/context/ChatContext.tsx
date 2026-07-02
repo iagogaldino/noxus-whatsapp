@@ -159,7 +159,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleSent = useCallback(
     (event: ChatMessageSentEvent) => {
-      appendMessage({
+      const message: Message = {
         id: event.id,
         chatId: event.chatId,
         text: event.text,
@@ -167,7 +167,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timestamp: new Date(event.timestamp),
         status: 'sent',
         type: 'text',
+      };
+
+      setConversations((prev) => {
+        const existing = prev.find((c) => c.id === event.chatId);
+        const participant: User = existing?.participant ?? {
+          id: event.chatId,
+          name: event.chatId,
+          avatarColor: pickAvatarColor(event.chatId),
+        };
+
+        const updated: Conversation = {
+          id: event.chatId,
+          participant,
+          lastMessage: message,
+          unreadCount: existing?.unreadCount ?? 0,
+        };
+
+        const others = prev.filter((c) => c.id !== event.chatId);
+        return [updated, ...others].sort(
+          (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+        );
       });
+
+      appendMessage(message);
     },
     [appendMessage],
   );

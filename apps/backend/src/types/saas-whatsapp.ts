@@ -22,6 +22,7 @@ export interface SaasWhatsAppContact {
   id: string;
   jid: string;
   phone?: string;
+  name?: string;
   notify?: string;
 }
 
@@ -59,6 +60,7 @@ export interface SaasIncomingMessageEvent {
   text: string;
   userId: string;
   instanceId: string;
+  jid?: string;
 }
 
 export interface SaasSendMessageAck {

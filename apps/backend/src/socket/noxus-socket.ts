@@ -4,8 +4,13 @@ import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
 import type { SaasIncomingMessageEvent } from '../types/saas-whatsapp.js';
-import { normalizePhone } from '../services/saas-whatsapp.service.js';
-import { upsertConversation } from '../services/conversation-store.js';
+import { normalizePhone, resolveInstanceId } from '../services/saas-whatsapp.service.js';
+import {
+  parseIncomingPayload,
+  persistIncomingMessage,
+  resolveIncomingChatId,
+  saveMessage,
+} from '../services/chat-persistence.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -42,8 +47,18 @@ function authenticateSocket(socket: Socket): AuthPayload | null {
   }
 }
 
-function mapIncomingPayload(payload: SaasIncomingMessageEvent): ChatMessageReceivedEvent {
-  const chatId = normalizePhone(payload.from || payload.instanceId);
+function mapIncomingPayload(
+  raw: unknown,
+  instanceId?: string,
+): ChatMessageReceivedEvent | null {
+  const payload = parseIncomingPayload(raw);
+  if (!payload) return null;
+
+  const chatId = resolveIncomingChatId(payload, {
+    instanceId: instanceId ?? payload.instanceId,
+  });
+  if (!chatId) return null;
+
   return {
     id: payload.messageId,
     chatId,
@@ -52,6 +67,23 @@ function mapIncomingPayload(payload: SaasIncomingMessageEvent): ChatMessageRecei
     timestamp: payload.timestamp,
     fromName: payload.to,
   };
+}
+
+async function handleIncomingMessage(raw: unknown): Promise<void> {
+  const payload = parseIncomingPayload(raw);
+  if (!payload) return;
+
+  let instanceId = payload.instanceId;
+  if (!instanceId) {
+    instanceId = await resolveInstanceId();
+  }
+
+  const event = mapIncomingPayload(raw, instanceId);
+  if (event) {
+    io?.to('whatsapp-chat').emit('chat:message:received', event);
+  }
+
+  await persistIncomingMessage(raw);
 }
 
 export function createNoxusSocketServer(httpServer: HttpServer): Server {
@@ -100,18 +132,21 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           status: 'sent',
         };
 
-        upsertConversation(
-          sent.chatId,
-          {
-            id: sent.id,
-            jid: `${sent.chatId}@s.whatsapp.net`,
-            fromMe: true,
-            timestamp: sent.timestamp,
-            text: sent.text,
-            type: 'conversation',
-          },
-          sent.chatId,
-        );
+        void resolveInstanceId()
+          .then((instanceId) =>
+            saveMessage({
+              instanceId,
+              chatId: sent.chatId,
+              externalId: sent.id,
+              fromMe: true,
+              text: sent.text,
+              timestamp: sent.timestamp,
+              participantName: sent.chatId,
+            }),
+          )
+          .catch((err) => {
+            console.error('[Chat] Erro ao persistir mensagem enviada:', err);
+          });
 
         io?.to('whatsapp-chat').emit('chat:message:sent', sent);
         ack?.({ ok: true, message: sent });
@@ -122,8 +157,7 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
   });
 
   whatsappSocketBridge.onMessageReceived((payload) => {
-    const event = mapIncomingPayload(payload);
-    io?.to('whatsapp-chat').emit('chat:message:received', event);
+    void handleIncomingMessage(payload);
   });
 
   return io;

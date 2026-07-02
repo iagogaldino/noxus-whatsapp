@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import * as chatPersistence from '../services/chat-persistence.service.js';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
-import { upsertConversation } from '../services/conversation-store.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 const sendMessageSchema = z.object({
@@ -124,14 +124,28 @@ export async function getConversationMessages(
     const jid = req.params.jid;
     const limit = req.query.limit ? Number(req.query.limit) : 20;
     const beforeMessageId = req.query.beforeMessageId as string | undefined;
-    const messages = await saasWhatsApp.getConversationMessages(instanceId, jid, {
+
+    let messages = await chatPersistence.listMessages(instanceId, jid, {
       limit,
       beforeMessageId,
     });
 
-    if (messages.items.length > 0) {
-      const lastMessage = messages.items[messages.items.length - 1];
-      upsertConversation(jid, lastMessage, saasWhatsApp.normalizePhone(jid));
+    if (messages.items.length === 0 && !beforeMessageId) {
+      try {
+        const saasMessages = await saasWhatsApp.getConversationMessages(instanceId, jid, {
+          limit,
+        });
+        if (saasMessages.items.length > 0) {
+          await chatPersistence.saveMessages(
+            instanceId,
+            saasMessages.items,
+            saasWhatsApp.normalizePhone(jid),
+          );
+          messages = await chatPersistence.listMessages(instanceId, jid, { limit });
+        }
+      } catch {
+        // Histórico indisponível no SaaS — retorna lista vazia do banco
+      }
     }
 
     res.json(messages);
@@ -145,7 +159,20 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     const body = sendMessageSchema.parse(req.body);
     const instanceId = await saasWhatsApp.resolveInstanceId();
     await saasWhatsApp.sendMessage(instanceId, body.phoneNumber, body.message);
-    res.json({ ok: true });
+
+    const chatId = saasWhatsApp.normalizePhone(body.phoneNumber);
+    const messageId = `local-${Date.now()}`;
+    await chatPersistence.saveMessage({
+      instanceId,
+      chatId,
+      externalId: messageId,
+      fromMe: true,
+      text: body.message,
+      timestamp: new Date(),
+      participantName: chatId,
+    });
+
+    res.json({ ok: true, messageId });
   } catch (err) {
     next(err);
   }
