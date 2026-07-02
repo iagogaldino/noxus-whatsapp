@@ -6,7 +6,7 @@ export interface User {
   status?: string;
 }
 
-export type MessageStatus = 'sent' | 'delivered' | 'read';
+export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
 export type MessageType = 'text' | 'image' | 'file';
 

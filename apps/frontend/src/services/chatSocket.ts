@@ -74,7 +74,10 @@ class ChatSocketService {
     return () => this.sentListeners.delete(listener);
   }
 
-  sendMessage(chatId: string, text: string): Promise<{ ok: boolean; error?: string }> {
+  sendMessage(
+    chatId: string,
+    text: string,
+  ): Promise<{ ok: boolean; error?: string; message?: ChatMessageSentEvent }> {
     return new Promise((resolve) => {
       if (!this.socket?.connected) {
         resolve({ ok: false, error: 'Socket não conectado.' });
@@ -85,10 +88,14 @@ class ChatSocketService {
         resolve({ ok: false, error: 'Timeout ao enviar.' });
       }, 15000);
 
-      this.socket.emit('chat:message:send', { chatId, text }, (ack: { ok: boolean; error?: string }) => {
-        clearTimeout(timeout);
-        resolve(ack ?? { ok: false, error: 'Sem resposta do servidor.' });
-      });
+      this.socket.emit(
+        'chat:message:send',
+        { chatId, text },
+        (ack: { ok: boolean; error?: string; message?: ChatMessageSentEvent }) => {
+          clearTimeout(timeout);
+          resolve(ack ?? { ok: false, error: 'Sem resposta do servidor.' });
+        },
+      );
     });
   }
 

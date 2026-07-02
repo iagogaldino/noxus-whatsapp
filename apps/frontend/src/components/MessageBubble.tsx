@@ -1,5 +1,5 @@
 import { IonIcon } from '@ionic/react';
-import { checkmarkDoneOutline, documentOutline } from 'ionicons/icons';
+import { alertCircleOutline, checkmarkDoneOutline, documentOutline, timeOutline } from 'ionicons/icons';
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
 import { formatFileSize, getMessageType } from '../utils/message';
@@ -64,13 +64,25 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
 
         <div className="wa-bubble__meta">
           <span className="wa-bubble__time">{formatMessageTime(message.timestamp)}</span>
-          {isSent && message.status && (
+          {isSent && message.status === 'failed' && (
             <IonIcon
-              icon={checkmarkDoneOutline}
-              className="wa-bubble__status"
-              style={{ color: message.status === 'read' ? '#53bdeb' : 'var(--wa-text-secondary)' }}
+              icon={alertCircleOutline}
+              className="wa-bubble__status wa-bubble__status--failed"
+              title="Falha ao enviar"
             />
           )}
+          {isSent && message.status === 'pending' && (
+            <IonIcon icon={timeOutline} className="wa-bubble__status wa-bubble__status--pending" />
+          )}
+          {isSent &&
+            message.status &&
+            (message.status === 'sent' || message.status === 'delivered' || message.status === 'read') && (
+              <IonIcon
+                icon={checkmarkDoneOutline}
+                className="wa-bubble__status"
+                style={{ color: message.status === 'read' ? '#53bdeb' : 'var(--wa-text-secondary)' }}
+              />
+            )}
         </div>
       </div>
     </div>

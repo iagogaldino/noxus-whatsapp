@@ -329,6 +329,15 @@ ion-app {
   color: #53bdeb;
 }
 
+.wa-bubble__status--pending {
+  color: var(--wa-text-secondary);
+  opacity: 0.75;
+}
+
+.wa-bubble__status--failed {
+  color: #ea4335;
+}
+
 .wa-bubble--media {
   padding: 4px 4px 4px;
   max-width: min(65%, 280px);

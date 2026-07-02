@@ -119,6 +119,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   }, []);
 
+  const updateMessage = useCallback((chatId: string, messageId: string, patch: Partial<Message>) => {
+    setMessagesByChat((prev) => {
+      const list = prev[chatId] ?? [];
+      const index = list.findIndex((m) => m.id === messageId);
+      if (index < 0) return prev;
+
+      const next = [...list];
+      next[index] = { ...next[index], ...patch };
+      return { ...prev, [chatId]: next };
+    });
+
+    setConversations((prev) =>
+      prev
+        .map((conv) => {
+          if (conv.id !== chatId || conv.lastMessage.id !== messageId) return conv;
+          return { ...conv, lastMessage: { ...conv.lastMessage, ...patch } };
+        })
+        .sort((a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime()),
+    );
+  }, []);
+
   const handleIncoming = useCallback(
     (event: ChatMessageReceivedEvent) => {
       const message: Message = {
@@ -157,43 +178,58 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [appendMessage],
   );
 
-  const handleSent = useCallback(
-    (event: ChatMessageSentEvent) => {
-      const message: Message = {
-        id: event.id,
-        chatId: event.chatId,
-        text: event.text,
-        senderId: event.senderId,
-        timestamp: new Date(event.timestamp),
-        status: 'sent',
-        type: 'text',
+  const handleSent = useCallback((event: ChatMessageSentEvent) => {
+    const serverMessage: Message = {
+      id: event.id,
+      chatId: event.chatId,
+      text: event.text,
+      senderId: event.senderId,
+      timestamp: new Date(event.timestamp),
+      status: 'sent',
+      type: 'text',
+    };
+
+    setMessagesByChat((prev) => {
+      const list = prev[event.chatId] ?? [];
+      if (list.some((m) => m.id === event.id)) return prev;
+
+      const pendingIndex = list.findIndex(
+        (m) => m.status === 'pending' && m.senderId === event.senderId && m.text === event.text,
+      );
+
+      if (pendingIndex >= 0) {
+        const next = [...list];
+        next[pendingIndex] = serverMessage;
+        return { ...prev, [event.chatId]: next };
+      }
+
+      return {
+        ...prev,
+        [event.chatId]: [...list, serverMessage],
+      };
+    });
+
+    setConversations((prev) => {
+      const existing = prev.find((c) => c.id === event.chatId);
+      const participant: User = existing?.participant ?? {
+        id: event.chatId,
+        name: event.chatId,
+        avatarColor: pickAvatarColor(event.chatId),
       };
 
-      setConversations((prev) => {
-        const existing = prev.find((c) => c.id === event.chatId);
-        const participant: User = existing?.participant ?? {
-          id: event.chatId,
-          name: event.chatId,
-          avatarColor: pickAvatarColor(event.chatId),
-        };
+      const updated: Conversation = {
+        id: event.chatId,
+        participant,
+        lastMessage: serverMessage,
+        unreadCount: existing?.unreadCount ?? 0,
+      };
 
-        const updated: Conversation = {
-          id: event.chatId,
-          participant,
-          lastMessage: message,
-          unreadCount: existing?.unreadCount ?? 0,
-        };
-
-        const others = prev.filter((c) => c.id !== event.chatId);
-        return [updated, ...others].sort(
-          (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
-        );
-      });
-
-      appendMessage(message);
-    },
-    [appendMessage],
-  );
+      const others = prev.filter((c) => c.id !== event.chatId);
+      return [updated, ...others].sort(
+        (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+      );
+    });
+  }, []);
 
   const refreshConversations = useCallback(async () => {
     if (!session) return;
@@ -363,27 +399,41 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      let result = await chatSocket.sendMessage(chatId, trimmed);
+      const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 
-      if (!result.ok) {
-        try {
-          await sendMessageRest(chatId, trimmed);
-          appendMessage({
-            id: `${chatId}-local-${Date.now()}`,
-            chatId,
-            text: trimmed,
-            senderId: currentUser.id,
-            timestamp: new Date(),
+      appendMessage({
+        id: clientId,
+        chatId,
+        text: trimmed,
+        senderId: currentUser.id,
+        timestamp: new Date(),
+        status: 'pending',
+        type: 'text',
+      });
+
+      const socketResult = await chatSocket.sendMessage(chatId, trimmed);
+
+      if (socketResult.ok) {
+        if (socketResult.message) {
+          updateMessage(chatId, clientId, {
+            id: socketResult.message.id,
             status: 'sent',
-            type: 'text',
+            timestamp: new Date(socketResult.message.timestamp),
           });
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Falha ao enviar mensagem.';
-          setError(message);
+        } else {
+          updateMessage(chatId, clientId, { status: 'sent' });
         }
+        return;
+      }
+
+      try {
+        await sendMessageRest(chatId, trimmed);
+        updateMessage(chatId, clientId, { status: 'sent' });
+      } catch {
+        updateMessage(chatId, clientId, { status: 'failed' });
       }
     },
-    [appendMessage, currentUser.id],
+    [appendMessage, currentUser.id, updateMessage],
   );
 
   const sendAttachment = useCallback(

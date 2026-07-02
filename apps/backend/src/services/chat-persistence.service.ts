@@ -17,6 +17,22 @@ export function nameAliasChatId(contactName: string): string {
   return `name:${slugifyContactName(contactName)}`;
 }
 
+export function participantNameFromChatId(chatId: string): string | null {
+  if (!chatId.startsWith('name:')) return null;
+  return chatId
+    .slice(5)
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function sanitizeParticipantName(
+  name: string | undefined | null,
+  chatId: string,
+): string {
+  if (name && !name.startsWith('name:')) return name;
+  return participantNameFromChatId(chatId) ?? name ?? chatId;
+}
+
 /** Preserva ids `name:*`; telefones são normalizados para dígitos. */
 export function normalizeChatId(chatId: string): string {
   if (chatId.startsWith('name:')) return chatId;
@@ -108,7 +124,10 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
       {
         instanceId: input.instanceId,
         chatId,
-        participantName: input.participantName ?? existing?.participantName ?? chatId,
+        participantName: sanitizeParticipantName(
+          input.participantName ?? existing?.participantName,
+          chatId,
+        ),
         lastMessageAt: timestamp,
         lastMessageExternalId: input.externalId,
         lastMessageText: input.text,
@@ -163,7 +182,7 @@ export async function listConversations(
 
   return docs.map((doc) => ({
     chatId: doc.chatId,
-    participantName: doc.participantName,
+    participantName: sanitizeParticipantName(doc.participantName, doc.chatId),
     lastMessage: {
       id: doc.lastMessageExternalId,
       jid: toJid(doc.chatId),
@@ -492,23 +511,33 @@ export async function resolveOutboundPhone(instanceId: string, chatId: string): 
     return normalizePhone(conversation.phoneNumber);
   }
 
-  const contactName =
-    conversation?.participantName ??
-    (normalizedChatId.startsWith('name:')
-      ? normalizedChatId.slice(5).replace(/-/g, ' ')
-      : null);
+  const namesToTry = new Set<string>();
+  const fromConversation = sanitizeParticipantName(conversation?.participantName, normalizedChatId);
+  if (fromConversation && !fromConversation.startsWith('name:')) {
+    namesToTry.add(fromConversation);
+  }
+  const fromChatId = participantNameFromChatId(normalizedChatId);
+  if (fromChatId) namesToTry.add(fromChatId);
 
-  if (contactName) {
+  for (const contactName of namesToTry) {
     const phoneFromContacts = await lookupChatIdByContactName(instanceId, contactName);
-    if (phoneFromContacts) {
-      if (normalizedChatId.startsWith('name:')) {
-        await mergeNameAliasConversation(instanceId, {
-          chatId: phoneFromContacts,
-          participantName: contactName,
-        });
-      }
-      return phoneFromContacts;
+    if (!phoneFromContacts) continue;
+
+    if (normalizedChatId.startsWith('name:')) {
+      await mergeNameAliasConversation(instanceId, {
+        chatId: phoneFromContacts,
+        participantName: contactName,
+      });
     }
+
+    if (conversation && conversation.participantName?.startsWith('name:')) {
+      await ChatConversation.updateOne(
+        { instanceId, chatId: phoneFromContacts },
+        { $set: { participantName: contactName, phoneNumber: phoneFromContacts } },
+      );
+    }
+
+    return phoneFromContacts;
   }
 
   throw new AppError(
