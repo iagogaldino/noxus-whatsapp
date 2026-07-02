@@ -27,9 +27,9 @@ const AdminRoutes: React.FC = () => (
 const AdminLayout: React.FC = () => (
   <EmployeeProvider>
     <AdminRoute>
-      <IonSplitPane contentId="admin-main" when="md" className="admin-split-pane admin-app">
-        <IonMenu contentId="admin-main" menuId="admin-menu" className="admin-menu">
-          <IonHeader className="ion-hide-md-up">
+      <div className="admin-app-shell">
+        <IonMenu contentId="admin-main" menuId="admin-menu" className="admin-menu ion-hide-md-up">
+          <IonHeader>
             <IonToolbar className="admin-toolbar">
               <IonTitle>Menu</IonTitle>
             </IonToolbar>
@@ -39,10 +39,16 @@ const AdminLayout: React.FC = () => (
           </IonContent>
         </IonMenu>
 
-        <IonRouterOutlet id="admin-main">
-          <AdminRoutes />
-        </IonRouterOutlet>
-      </IonSplitPane>
+        <IonSplitPane contentId="admin-main" when="md" className="admin-split-pane admin-app">
+          <div className="admin-sidebar ion-hide-md-down">
+            <AdminMenu />
+          </div>
+
+          <IonRouterOutlet id="admin-main">
+            <AdminRoutes />
+          </IonRouterOutlet>
+        </IonSplitPane>
+      </div>
     </AdminRoute>
   </EmployeeProvider>
 );

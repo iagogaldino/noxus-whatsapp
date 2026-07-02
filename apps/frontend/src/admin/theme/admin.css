@@ -13,6 +13,10 @@
   height: 100%;
 }
 
+.admin-app-shell {
+  height: 100%;
+}
+
 /* ── Toolbar ── */
 .admin-toolbar {
   --background: var(--admin-primary);
@@ -34,6 +38,61 @@
   height: 100%;
 }
 
+@media (max-width: 767.98px) {
+  ion-split-pane.admin-split-pane .admin-sidebar {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  ion-split-pane.admin-split-pane.split-pane-visible {
+    display: flex;
+    flex-direction: row;
+  }
+
+  ion-split-pane.admin-split-pane .admin-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 var(--side-width);
+    width: var(--side-width);
+    max-width: var(--side-max-width);
+    min-width: var(--side-min-width);
+    height: 100%;
+    background: linear-gradient(180deg, #075e54 0%, #0a4a44 100%);
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.28) transparent;
+  }
+
+  ion-split-pane.admin-split-pane .admin-sidebar::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ion-split-pane.admin-split-pane .admin-sidebar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+  }
+
+  ion-split-pane.admin-split-pane > ion-router-outlet.split-pane-main {
+    position: relative !important;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    left: auto !important;
+    right: auto !important;
+    width: auto !important;
+  }
+
+  ion-split-pane.admin-split-pane ion-router-outlet .ion-page {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
 .admin-menu {
   --width: 280px;
   --background: #075e54;
@@ -44,16 +103,13 @@
   --background: linear-gradient(180deg, #075e54 0%, #0a4a44 100%);
 }
 
+.admin-sidebar {
+  background: linear-gradient(180deg, #075e54 0%, #0a4a44 100%);
+}
+
 @media (min-width: 768px) {
   .admin-menu::part(backdrop) {
     display: none;
-  }
-
-  .admin-menu::part(container) {
-    position: relative;
-    transform: none !important;
-    visibility: visible !important;
-    pointer-events: auto;
   }
 }
 
@@ -68,6 +124,11 @@
   font-weight: 700;
   font-size: 1.15rem;
   padding-inline-start: 8px;
+}
+
+.admin-sidebar .admin-menu__inner {
+  width: 100%;
+  min-height: 100%;
 }
 
 .admin-menu__inner {
@@ -151,7 +212,7 @@
 
 .admin-menu__user-email {
   display: block;
-  color: rgba(255, 255, 255, 0.65);
+  color: rgba(255, 255, 255, 0.82);
   font-size: 0.72rem;
   white-space: nowrap;
   overflow: hidden;
@@ -161,10 +222,13 @@
 .admin-menu__nav {
   flex: 1;
   padding: 8px 0;
+  background: transparent;
 }
 
-.admin-menu ion-list {
+.admin-menu ion-list,
+.admin-sidebar ion-list {
   background: transparent;
+  --background: transparent;
   padding: 0;
 }
 
@@ -174,7 +238,7 @@
   --background-hover: rgba(255, 255, 255, 0.08);
   --background-activated: rgba(255, 255, 255, 0.12);
   --background-focused: rgba(255, 255, 255, 0.1);
-  --color: rgba(255, 255, 255, 0.85);
+  --color: #ffffff;
   --border-color: transparent;
   --inner-border-width: 0;
   --padding-start: 16px;
@@ -182,6 +246,18 @@
   margin: 2px 10px;
   border-radius: 10px;
   font-size: 0.95rem;
+}
+
+.admin-menu ion-item ion-label,
+.admin-sidebar ion-item ion-label {
+  color: #ffffff !important;
+  opacity: 0.92;
+}
+
+.admin-menu ion-item.admin-menu__item--active ion-label,
+.admin-sidebar ion-item.admin-menu__item--active ion-label {
+  opacity: 1;
+  font-weight: 600;
 }
 
 .admin-menu ion-item::part(native),
@@ -203,7 +279,7 @@
 
 .admin-menu ion-item ion-icon,
 .admin-sidebar ion-item ion-icon {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.9);
   margin-right: 12px;
 }
 
@@ -216,6 +292,7 @@
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: 8px;
   margin-top: auto;
+  background: transparent;
 }
 
 /* ── Content area ── */
