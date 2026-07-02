@@ -1,6 +1,8 @@
+import { Types } from 'mongoose';
 import { ChatConversation } from '../models/ChatConversation.js';
 import { ChatMessage } from '../models/ChatMessage.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { getActiveSectorById } from './sector.service.js';
 import type {
   SaasConversationMessage,
   SaasConversationMessagesResponse,
@@ -214,29 +216,117 @@ export async function getConversation(
   return { participantName: doc.participantName };
 }
 
+export interface ConversationViewer {
+  role: 'admin' | 'employee';
+  sectorId?: string | null;
+}
+
 export async function listConversations(
   instanceId: string,
   limit = 200,
+  viewer?: ConversationViewer,
 ): Promise<SaasConversationSummary[]> {
   await deduplicateNameAliasConversations(instanceId);
 
-  const docs = await ChatConversation.find({ instanceId })
+  const filter: Record<string, unknown> = { instanceId };
+
+  if (viewer && viewer.role !== 'admin') {
+    const unassigned = [{ assignedSectorId: null }, { assignedSectorId: { $exists: false } }];
+
+    if (viewer.sectorId && Types.ObjectId.isValid(viewer.sectorId)) {
+      filter.$or = [
+        ...unassigned,
+        { assignedSectorId: new Types.ObjectId(viewer.sectorId) },
+      ];
+    } else {
+      filter.$or = unassigned;
+    }
+  }
+
+  const docs = await ChatConversation.find(filter)
     .sort({ lastMessageAt: -1 })
     .limit(limit)
+    .populate('assignedSectorId', 'name')
     .lean();
 
-  return docs.map((doc) => ({
-    chatId: doc.chatId,
-    participantName: sanitizeParticipantName(doc.participantName, doc.chatId),
-    lastMessage: {
-      id: doc.lastMessageExternalId,
-      jid: toJid(doc.chatId),
-      fromMe: doc.lastMessageFromMe,
-      timestamp: doc.lastMessageAt.toISOString(),
-      text: doc.lastMessageText,
-      type: 'conversation',
+  return docs.map((doc) => {
+    const assignedSectorDoc =
+      doc.assignedSectorId &&
+      typeof doc.assignedSectorId === 'object' &&
+      'name' in doc.assignedSectorId
+        ? (doc.assignedSectorId as { _id: Types.ObjectId; name: string })
+        : null;
+
+    return {
+      chatId: doc.chatId,
+      participantName: sanitizeParticipantName(doc.participantName, doc.chatId),
+      lastMessage: {
+        id: doc.lastMessageExternalId,
+        jid: toJid(doc.chatId),
+        fromMe: doc.lastMessageFromMe,
+        timestamp: doc.lastMessageAt.toISOString(),
+        text: doc.lastMessageText,
+        type: 'conversation',
+      },
+      assignedSector: assignedSectorDoc
+        ? { id: String(assignedSectorDoc._id), name: assignedSectorDoc.name }
+        : null,
+    };
+  });
+}
+
+export interface ForwardConversationResult {
+  chatId: string;
+  assignedSector: { id: string; name: string };
+  assignedAt: string;
+}
+
+export async function forwardConversation(
+  instanceId: string,
+  chatId: string,
+  sectorId: string,
+  assignedByUserId: string,
+): Promise<ForwardConversationResult> {
+  await getActiveSectorById(sectorId);
+
+  const normalizedChatId = normalizeChatId(chatId);
+  const assignedAt = new Date();
+
+  const doc = await ChatConversation.findOneAndUpdate(
+    { instanceId, chatId: normalizedChatId },
+    {
+      assignedSectorId: new Types.ObjectId(sectorId),
+      assignedAt,
+      assignedBy: new Types.ObjectId(assignedByUserId),
     },
-  }));
+    { new: true },
+  )
+    .populate('assignedSectorId', 'name')
+    .lean();
+
+  if (!doc) {
+    throw new AppError(404, 'Conversa não encontrada.');
+  }
+
+  const assignedSectorDoc =
+    doc.assignedSectorId &&
+    typeof doc.assignedSectorId === 'object' &&
+    'name' in doc.assignedSectorId
+      ? (doc.assignedSectorId as { _id: Types.ObjectId; name: string })
+      : null;
+
+  if (!assignedSectorDoc) {
+    throw new AppError(500, 'Falha ao encaminhar conversa.');
+  }
+
+  return {
+    chatId: doc.chatId,
+    assignedSector: {
+      id: String(assignedSectorDoc._id),
+      name: assignedSectorDoc.name,
+    },
+    assignedAt: assignedAt.toISOString(),
+  };
 }
 
 export async function listMessages(

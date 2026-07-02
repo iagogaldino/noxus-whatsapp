@@ -1,7 +1,8 @@
 import { IonContent, IonFooter, IonPage } from '@ionic/react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ChatHeader from '../components/ChatHeader';
+import ForwardConversationModal from '../components/ForwardConversationModal';
 import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
 import MessageListSkeleton from '../components/MessageListSkeleton';
@@ -10,8 +11,10 @@ import { useChat } from '../context/ChatContext';
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, isChatLoading, currentUser } =
+  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, isChatLoading, forwardConversation, currentUser } =
     useChat();
+
+  const [forwardModalOpen, setForwardModalOpen] = useState(false);
 
   const conversation = getConversation(id);
   const messages = getMessages(id);
@@ -78,7 +81,11 @@ const ChatDetail: React.FC = () => {
 
   return (
     <IonPage>
-      <ChatHeader user={conversation.participant} showBack />
+      <ChatHeader
+        user={conversation.participant}
+        showBack
+        onForward={() => setForwardModalOpen(true)}
+      />
       <IonContent ref={contentRef} className="wa-chat-bg">
         {isLoadingMessages ? (
           <MessageListSkeleton />
@@ -100,6 +107,13 @@ const ChatDetail: React.FC = () => {
           onSendAttachment={(file, caption) => void sendAttachment(id, file, caption)}
         />
       </IonFooter>
+
+      <ForwardConversationModal
+        isOpen={forwardModalOpen}
+        chatName={conversation.participant.name}
+        onClose={() => setForwardModalOpen(false)}
+        onSelectSector={(sectorId) => forwardConversation(id, sectorId)}
+      />
     </IonPage>
   );
 };

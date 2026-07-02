@@ -10,7 +10,7 @@ import type {
   SaasWhatsAppQrResponse,
   SaasWhatsAppStatusResponse,
 } from '../types/saas-whatsapp.js';
-import { listConversations as listPersistedConversations } from './chat-persistence.service.js';
+import { listConversations as listPersistedConversations, type ConversationViewer } from './chat-persistence.service.js';
 
 function ensureApiKey(): void {
   if (!env.SAAS_WHATSAPP_API_KEY) {
@@ -132,9 +132,9 @@ export async function getContacts(
 
 export async function getConversations(
   instanceId: string,
-  options: { limit?: number } = {},
+  options: { limit?: number; viewer?: ConversationViewer } = {},
 ): Promise<SaasConversationSummary[]> {
-  return listPersistedConversations(instanceId, options.limit ?? 200);
+  return listPersistedConversations(instanceId, options.limit ?? 200, options.viewer);
 }
 
 export async function getConversationMessages(

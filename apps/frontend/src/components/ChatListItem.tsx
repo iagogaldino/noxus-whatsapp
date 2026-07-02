@@ -13,7 +13,7 @@ interface ChatListItemProps {
 
 const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onClick }) => {
   const { currentUser } = useChat();
-  const { participant, lastMessage, unreadCount } = conversation;
+  const { participant, lastMessage, unreadCount, assignedSector } = conversation;
   const isSent = lastMessage.senderId === currentUser.id;
   const previewText = getMessagePreview(lastMessage);
   const preview = previewText ? (isSent ? `Você: ${previewText}` : previewText) : '';
@@ -30,7 +30,12 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onC
         <Avatar user={participant} />
         <div className="wa-chat-item__content">
           <div className="wa-chat-item__row">
-            <span className="wa-chat-item__name">{participant.name}</span>
+            <span className="wa-chat-item__name">
+              {participant.name}
+              {assignedSector && (
+                <span className="wa-sector-badge">{assignedSector.name}</span>
+              )}
+            </span>
             <span className="wa-chat-item__time">{formatChatTime(lastMessage.timestamp)}</span>
           </div>
           <div className="wa-chat-item__row">

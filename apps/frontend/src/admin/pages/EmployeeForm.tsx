@@ -4,15 +4,18 @@ import {
   IonInput,
   IonItem,
   IonLabel,
+  IonNote,
   IonPage,
   IonSelect,
   IonSelectOption,
+  IonSpinner,
   IonToast,
 } from '@ionic/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
 import { AdminHeader } from '../components/AdminHeader';
 import { useEmployees } from '../context/EmployeeContext';
+import { useSectors } from '../context/SectorContext';
 import { EmployeeFormData, EmployeeRole, EmployeeStatus } from '../types/employee';
 
 const emptyForm: EmployeeFormData = {
@@ -29,11 +32,18 @@ const EmployeeForm: React.FC = () => {
   const { id } = useParams<{ id?: string }>();
   const history = useHistory();
   const { getEmployeeById, createEmployee, updateEmployee } = useEmployees();
+  const { sectors, isLoading: sectorsLoading, error: sectorsError } = useSectors();
   const isEdit = !!id && id !== 'new';
 
   const [form, setForm] = useState<EmployeeFormData>(emptyForm);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+
+  const legacyDepartment = useMemo(() => {
+    if (!form.department) return null;
+    const exists = sectors.some((sector) => sector.name === form.department);
+    return exists ? null : form.department;
+  }, [form.department, sectors]);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -116,10 +126,37 @@ const EmployeeForm: React.FC = () => {
 
               <IonItem className="admin-form__item" lines="none">
                 <IonLabel position="stacked">Departamento</IonLabel>
-                <IonInput
-                  value={form.department}
-                  onIonInput={(e) => updateField('department', e.detail.value ?? '')}
-                />
+                {sectorsLoading ? (
+                  <div className="admin-form__inline-loading">
+                    <IonSpinner name="crescent" />
+                    <span>Carregando setores…</span>
+                  </div>
+                ) : (
+                  <IonSelect
+                    value={form.department}
+                    placeholder="Selecione um setor"
+                    interface="popover"
+                    onIonChange={(e) => updateField('department', e.detail.value ?? '')}
+                  >
+                    {legacyDepartment && (
+                      <IonSelectOption value={legacyDepartment}>
+                        {legacyDepartment} (não cadastrado)
+                      </IonSelectOption>
+                    )}
+                    {sectors.map((sector) => (
+                      <IonSelectOption key={sector.id} value={sector.name}>
+                        {sector.name}
+                        {sector.status === 'inactive' ? ' (inativo)' : ''}
+                      </IonSelectOption>
+                    ))}
+                  </IonSelect>
+                )}
+                {sectorsError && <IonNote color="danger">{sectorsError}</IonNote>}
+                {!sectorsLoading && sectors.length === 0 && (
+                  <IonNote color="medium">
+                    Nenhum setor cadastrado. Cadastre em Setores antes de atribuir.
+                  </IonNote>
+                )}
               </IonItem>
 
               <IonItem className="admin-form__item" lines="none">

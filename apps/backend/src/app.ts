@@ -3,6 +3,7 @@ import express from 'express';
 import { env } from './config/env.js';
 import { errorMiddleware } from './middleware/error.middleware.js';
 import { authRoutes } from './routes/auth.routes.js';
+import { sectorRoutes } from './routes/sector.routes.js';
 import { whatsappRoutes } from './routes/whatsapp.routes.js';
 
 export function createApp() {
@@ -21,6 +22,7 @@ export function createApp() {
   });
 
   app.use('/api/v1/auth', authRoutes);
+  app.use('/api/v1/sectors', sectorRoutes);
   app.use('/api/v1/whatsapp', whatsappRoutes);
 
   app.use(errorMiddleware);

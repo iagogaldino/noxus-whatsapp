@@ -25,6 +25,12 @@ export interface ChatMessageSentEvent {
   status: 'sent';
 }
 
+export interface ChatConversationForwardedEvent {
+  chatId: string;
+  assignedSector: { id: string; name: string };
+  assignedAt: string;
+}
+
 let io: Server | null = null;
 
 function authenticateSocket(socket: Socket): AuthPayload | null {
@@ -124,4 +130,8 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
 
 export function getNoxusSocketServer(): Server | null {
   return io;
+}
+
+export function emitConversationForwarded(event: ChatConversationForwardedEvent): void {
+  io?.to('whatsapp-chat').emit('chat:conversation:forwarded', event);
 }

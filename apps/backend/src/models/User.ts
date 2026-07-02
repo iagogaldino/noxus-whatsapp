@@ -34,6 +34,12 @@ const userSchema = new Schema(
       type: String,
       trim: true,
     },
+    sectorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Sector',
+      default: null,
+      index: true,
+    },
     phone: {
       type: String,
       trim: true,

@@ -369,6 +369,26 @@ ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wa-sector-badge {
+  display: inline-flex;
+  align-items: center;
+  max-width: 42%;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(7, 94, 84, 0.1);
+  color: var(--wa-primary);
+  font-size: 0.65rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 
 .wa-chat-item__time {
@@ -731,6 +751,46 @@ ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
 .wa-chat-header__status {
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+.wa-chat-menu {
+  padding: 4px 0;
+}
+
+.wa-forward-modal__intro {
+  padding: 16px 16px 8px;
+  color: var(--wa-text-secondary);
+  font-size: 0.9rem;
+}
+
+.wa-forward-modal__intro strong {
+  color: var(--wa-text-primary);
+}
+
+.wa-forward-modal__state,
+.wa-forward-modal__error {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--wa-text-secondary);
+}
+
+.wa-forward-modal__error {
+  color: #c62828;
+}
+
+.wa-forward-modal__list ion-item {
+  --padding-start: 16px;
+}
+
+.wa-forward-modal__list h2 {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--wa-text-primary);
+}
+
+.wa-forward-modal__list p {
+  font-size: 0.8rem;
+  color: var(--wa-text-secondary);
 }
 
 .wa-image-preview {

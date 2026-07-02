@@ -5,6 +5,7 @@ import {
   gridOutline,
   logOutOutline,
   peopleOutline,
+  businessOutline,
 } from 'ionicons/icons';
 import { useHistory, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
@@ -19,6 +20,7 @@ const AdminMenu: React.FC = () => {
   const items = [
     { label: 'Dashboard', path: '/admin', icon: gridOutline, exact: true },
     { label: 'Funcionários', path: '/admin/employees', icon: peopleOutline, exact: false },
+    { label: 'Setores', path: '/admin/sectors', icon: businessOutline, exact: false },
   ];
 
   const isActive = (path: string, exact: boolean) =>

@@ -1,7 +1,15 @@
 import 'dotenv/config';
 import { connectDb } from '../db/connect.js';
+import { Sector } from '../models/Sector.js';
 import { User } from '../models/User.js';
 import { hashPassword } from '../services/auth.service.js';
+
+const seedSectors = [
+  { name: 'Comercial', description: 'Vendas e atendimento comercial' },
+  { name: 'TI', description: 'Tecnologia da informação' },
+  { name: 'RH', description: 'Recursos humanos' },
+  { name: 'Suporte', description: 'Suporte ao cliente' },
+];
 
 const seedUsers = [
   {
@@ -18,6 +26,7 @@ const seedUsers = [
     role: 'employee' as const,
     status: 'active' as const,
     department: 'Comercial',
+    sectorName: 'Comercial',
     phone: '11 98765-4321',
   },
   {
@@ -27,6 +36,7 @@ const seedUsers = [
     role: 'employee' as const,
     status: 'active' as const,
     department: 'TI',
+    sectorName: 'TI',
     phone: '11 97654-3210',
   },
   {
@@ -36,6 +46,7 @@ const seedUsers = [
     role: 'admin' as const,
     status: 'active' as const,
     department: 'RH',
+    sectorName: 'RH',
     phone: '11 96543-2109',
   },
   {
@@ -45,14 +56,33 @@ const seedUsers = [
     role: 'employee' as const,
     status: 'inactive' as const,
     department: 'Suporte',
+    sectorName: 'Suporte',
   },
 ];
 
 async function seed() {
   await connectDb();
 
+  const sectorIds = new Map<string, string>();
+
+  for (const sector of seedSectors) {
+    const doc = await Sector.findOneAndUpdate(
+      { name: sector.name },
+      {
+        name: sector.name,
+        description: sector.description,
+        status: 'active',
+      },
+      { upsert: true, new: true },
+    );
+
+    sectorIds.set(sector.name, String(doc._id));
+    console.log(`Seeded sector: ${sector.name}`);
+  }
+
   for (const user of seedUsers) {
     const passwordHash = await hashPassword(user.password);
+    const sectorId = user.sectorName ? sectorIds.get(user.sectorName) : undefined;
 
     await User.findOneAndUpdate(
       { email: user.email },
@@ -63,6 +93,7 @@ async function seed() {
         role: user.role,
         status: user.status,
         department: user.department,
+        sectorId: sectorId ?? null,
         phone: user.phone,
       },
       { upsert: true, new: true },

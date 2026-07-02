@@ -33,4 +33,5 @@ export interface Conversation {
   participant: User;
   lastMessage: Message;
   unreadCount: number;
+  assignedSector?: { id: string; name: string } | null;
 }

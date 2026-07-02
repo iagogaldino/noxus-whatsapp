@@ -16,6 +16,7 @@ import {
 import {
   fetchConversationMessages,
   fetchConversations,
+  forwardConversation as forwardConversationApi,
   mapApiMessageToChat,
   normalizePhone,
   sendMessageRest,
@@ -63,6 +64,7 @@ interface ChatContextValue {
   sendMessage: (chatId: string, text: string) => Promise<void>;
   sendAttachment: (chatId: string, file: File, caption?: string) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
+  forwardConversation: (chatId: string, sectorId: string) => Promise<{ success: boolean; error?: string }>;
   refreshConversations: () => Promise<void>;
 }
 
@@ -115,6 +117,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         participant,
         lastMessage: message,
         unreadCount: existingConv?.unreadCount ?? 0,
+        assignedSector: existingConv?.assignedSector ?? null,
       };
 
       const others = prev.filter((c) => c.id !== chatId);
@@ -170,6 +173,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           participant,
           lastMessage: message,
           unreadCount: (existing?.unreadCount ?? 0) + 1,
+          assignedSector: existing?.assignedSector ?? null,
         };
 
         const others = prev.filter((c) => c.id !== event.chatId);
@@ -227,6 +231,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         participant,
         lastMessage: serverMessage,
         unreadCount: existing?.unreadCount ?? 0,
+        assignedSector: existing?.assignedSector ?? null,
       };
 
       const others = prev.filter((c) => c.id !== event.chatId);
@@ -252,6 +257,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           lastMessage,
           unreadCount: 0,
+          assignedSector: item.assignedSector ?? null,
         };
       });
 
@@ -300,11 +306,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const unsubReceived = chatSocket.onMessageReceived(handleIncoming);
     const unsubSent = chatSocket.onMessageSent(handleSent);
+    const unsubForwarded = chatSocket.onConversationForwarded(() => {
+      void refreshConversations();
+    });
 
     return () => {
       cancelled = true;
       unsubReceived();
       unsubSent();
+      unsubForwarded();
       chatSocket.disconnect();
     };
   }, [session, refreshConversations, handleIncoming, handleSent]);
@@ -398,6 +408,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               participant,
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
+              assignedSector: existing?.assignedSector ?? null,
             };
 
             const others = prev.filter((c) => c.id !== chatId);
@@ -571,6 +582,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               participant,
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
+              assignedSector: existing?.assignedSector ?? null,
             };
 
             const others = prev.filter((c) => c.id !== chatId);
@@ -595,6 +607,27 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, []);
 
+  const forwardConversation = useCallback(
+    async (chatId: string, sectorId: string) => {
+      try {
+        const result = await forwardConversationApi(chatId, sectorId);
+        setConversations((prev) =>
+          prev.map((conv) =>
+            conv.id === chatId ? { ...conv, assignedSector: result.assignedSector } : conv,
+          ),
+        );
+        await refreshConversations();
+        return { success: true };
+      } catch (err) {
+        return {
+          success: false,
+          error: err instanceof Error ? err.message : 'Falha ao encaminhar conversa.',
+        };
+      }
+    },
+    [refreshConversations],
+  );
+
   const value = useMemo(
     () => ({
       currentUser,
@@ -612,6 +645,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendMessage,
       sendAttachment,
       markAsRead,
+      forwardConversation,
       refreshConversations,
     }),
     [
@@ -629,6 +663,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendMessage,
       sendAttachment,
       markAsRead,
+      forwardConversation,
       refreshConversations,
     ],
   );

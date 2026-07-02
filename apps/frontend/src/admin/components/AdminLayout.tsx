@@ -9,10 +9,13 @@ import {
 } from '@ionic/react';
 import { Route } from 'react-router-dom';
 import { EmployeeProvider } from '../context/EmployeeContext';
+import { SectorProvider } from '../context/SectorContext';
 import { WhatsAppConnectionProvider } from '../context/WhatsAppConnectionContext';
 import AdminDashboard from '../pages/AdminDashboard';
 import EmployeeForm from '../pages/EmployeeForm';
 import EmployeeList from '../pages/EmployeeList';
+import SectorForm from '../pages/SectorForm';
+import SectorList from '../pages/SectorList';
 import AdminMenu from './AdminMenu';
 import AdminRoute from './AdminRoute';
 
@@ -22,12 +25,16 @@ const AdminRoutes: React.FC = () => (
     <Route exact path="/admin/employees" component={EmployeeList} />
     <Route exact path="/admin/employees/:id/edit" component={EmployeeForm} />
     <Route exact path="/admin/employees/new" component={EmployeeForm} />
+    <Route exact path="/admin/sectors" component={SectorList} />
+    <Route exact path="/admin/sectors/:id/edit" component={SectorForm} />
+    <Route exact path="/admin/sectors/new" component={SectorForm} />
   </>
 );
 
 const AdminLayout: React.FC = () => (
   <EmployeeProvider>
-    <WhatsAppConnectionProvider>
+    <SectorProvider>
+      <WhatsAppConnectionProvider>
       <AdminRoute>
         <div className="admin-app-shell">
           <IonMenu contentId="admin-main" menuId="admin-menu" className="admin-menu ion-hide-md-up">
@@ -53,6 +60,7 @@ const AdminLayout: React.FC = () => (
         </div>
       </AdminRoute>
     </WhatsAppConnectionProvider>
+    </SectorProvider>
   </EmployeeProvider>
 );
 

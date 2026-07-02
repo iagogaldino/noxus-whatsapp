@@ -2,6 +2,7 @@ import { IonButton, IonContent, IonIcon, IonPage, IonSpinner } from '@ionic/reac
 import {
   addOutline,
   arrowForwardOutline,
+  businessOutline,
   logoWhatsapp,
   peopleOutline,
 } from 'ionicons/icons';
@@ -11,12 +12,14 @@ import { useAppNavigate } from '../../utils/navigation';
 import { AdminHeader } from '../components/AdminHeader';
 import { WhatsAppPairingModal } from '../components/WhatsAppPairingModal';
 import { useEmployees } from '../context/EmployeeContext';
+import { useSectors } from '../context/SectorContext';
 import { useWhatsAppConnection } from '../context/WhatsAppConnectionContext';
 
 const AdminDashboard: React.FC = () => {
   const history = useHistory();
   const { replace } = useAppNavigate();
   const { stats } = useEmployees();
+  const { sectors } = useSectors();
   const {
     status,
     instanceCode,
@@ -116,6 +119,21 @@ const AdminDashboard: React.FC = () => {
                 <div className="admin-action-card__content">
                   <span className="admin-action-card__label">Ver funcionários</span>
                   <span className="admin-action-card__hint">{stats.total} cadastrados</span>
+                </div>
+                <IonIcon icon={arrowForwardOutline} className="admin-action-card__arrow" />
+              </button>
+
+              <button
+                type="button"
+                className="admin-action-card"
+                onClick={() => history.push('/admin/sectors')}
+              >
+                <div className="admin-action-card__icon admin-action-card__icon--primary">
+                  <IonIcon icon={businessOutline} />
+                </div>
+                <div className="admin-action-card__content">
+                  <span className="admin-action-card__label">Ver setores</span>
+                  <span className="admin-action-card__hint">{sectors.length} cadastrados</span>
                 </div>
                 <IonIcon icon={arrowForwardOutline} className="admin-action-card__arrow" />
               </button>

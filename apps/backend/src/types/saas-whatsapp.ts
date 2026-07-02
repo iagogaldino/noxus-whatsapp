@@ -46,6 +46,7 @@ export interface SaasConversationSummary {
   chatId: string;
   participantName: string;
   lastMessage: SaasConversationMessage;
+  assignedSector?: { id: string; name: string } | null;
 }
 
 export interface SaasConversationsResponse {

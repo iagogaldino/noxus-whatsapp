@@ -46,6 +46,7 @@ export interface ConversationSummary {
   chatId: string;
   participantName: string;
   lastMessage: ConversationMessagesResponse['items'][number];
+  assignedSector?: { id: string; name: string } | null;
 }
 
 export interface ConversationsResponse {
@@ -123,6 +124,31 @@ export async function fetchContacts(filter: 'named' | 'all' = 'all'): Promise<Wh
 
 export async function fetchConversations(limit = 200): Promise<ConversationsResponse> {
   return authRequest<ConversationsResponse>(`/api/v1/whatsapp/conversations?limit=${limit}`);
+}
+
+export interface SectorOption {
+  id: string;
+  name: string;
+  description: string;
+  status: 'active' | 'inactive';
+}
+
+export async function fetchActiveSectors(): Promise<SectorOption[]> {
+  return authRequest<SectorOption[]>('/api/v1/sectors');
+}
+
+export async function forwardConversation(
+  chatId: string,
+  sectorId: string,
+): Promise<{
+  chatId: string;
+  assignedSector: { id: string; name: string };
+  assignedAt: string;
+}> {
+  return authRequest(`/api/v1/whatsapp/conversations/${encodeURIComponent(chatId)}/forward`, {
+    method: 'PATCH',
+    body: JSON.stringify({ sectorId }),
+  });
 }
 
 export async function fetchConversationMessages(

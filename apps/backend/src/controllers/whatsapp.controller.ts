@@ -2,10 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import type { SaasConversationMessage } from '../types/saas-whatsapp.js';
 import { AppError } from '../middleware/error.middleware.js';
+import { User } from '../models/User.js';
 import * as chatPersistence from '../services/chat-persistence.service.js';
 import { syncConversationFromSaas } from '../services/chat-sync.service.js';
 import { getMessageMedia } from '../services/chat-media.service.js';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
+import { emitConversationForwarded } from '../socket/noxus-socket.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 const sendMessageSchema = z
@@ -25,6 +27,10 @@ const sendMessageSchema = z
 
 const createInstanceSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+});
+
+const forwardConversationSchema = z.object({
+  sectorId: z.string().min(1),
 });
 
 async function getInstanceId(req: Request): Promise<string> {
@@ -122,8 +128,36 @@ export async function listConversations(
   try {
     const instanceId = await saasWhatsApp.resolveInstanceId();
     const limit = req.query.limit ? Number(req.query.limit) : 200;
-    const conversations = await saasWhatsApp.getConversations(instanceId, { limit });
+    const user = await User.findById(req.auth!.userId).select('role sectorId').lean();
+    const conversations = await saasWhatsApp.getConversations(instanceId, {
+      limit,
+      viewer: {
+        role: user?.role ?? 'employee',
+        sectorId: user?.sectorId ? String(user.sectorId) : null,
+      },
+    });
     res.json({ items: conversations });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function forwardConversation(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const body = forwardConversationSchema.parse(req.body ?? {});
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const result = await chatPersistence.forwardConversation(
+      instanceId,
+      req.params.chatId,
+      body.sectorId,
+      req.auth!.userId,
+    );
+    emitConversationForwarded(result);
+    res.json(result);
   } catch (err) {
     next(err);
   }

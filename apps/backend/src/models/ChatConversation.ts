@@ -36,6 +36,19 @@ const chatConversationSchema = new Schema(
       type: String,
       trim: true,
     },
+    assignedSectorId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Sector',
+      default: null,
+      index: true,
+    },
+    assignedAt: {
+      type: Date,
+    },
+    assignedBy: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
   },
   {
     timestamps: true,
