@@ -323,6 +323,19 @@ export async function forwardConversation(
   await getActiveSectorById(sectorId);
 
   const normalizedChatId = normalizeChatId(chatId);
+  const existing = await ChatConversation.findOne({ instanceId, chatId: normalizedChatId })
+    .select('assignedSectorId')
+    .lean();
+
+  if (!existing) {
+    throw new AppError(404, 'Conversa não encontrada.');
+  }
+
+  const currentSectorId = existing.assignedSectorId ? String(existing.assignedSectorId) : null;
+  if (currentSectorId === sectorId) {
+    throw new AppError(400, 'A conversa já está neste setor.');
+  }
+
   const assignedAt = new Date();
 
   const doc = await ChatConversation.findOneAndUpdate(

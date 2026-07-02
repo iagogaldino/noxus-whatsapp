@@ -18,6 +18,7 @@ import { fetchActiveSectors, type SectorOption } from '../services/chatApi';
 interface ForwardConversationModalProps {
   isOpen: boolean;
   chatName: string;
+  currentSectorId?: string | null;
   onClose: () => void;
   onSelectSector: (sectorId: string) => Promise<{ success: boolean; error?: string }>;
 }
@@ -25,6 +26,7 @@ interface ForwardConversationModalProps {
 const ForwardConversationModal: React.FC<ForwardConversationModalProps> = ({
   isOpen,
   chatName,
+  currentSectorId,
   onClose,
   onSelectSector,
 }) => {
@@ -79,6 +81,8 @@ const ForwardConversationModal: React.FC<ForwardConversationModalProps> = ({
     setError(result.error ?? 'Falha ao encaminhar conversa.');
   };
 
+  const availableSectors = sectors.filter((sector) => sector.id !== currentSectorId);
+
   return (
     <IonModal isOpen={isOpen} onDidDismiss={onClose} className="wa-forward-modal">
       <IonHeader>
@@ -95,7 +99,7 @@ const ForwardConversationModal: React.FC<ForwardConversationModalProps> = ({
 
         {isLoading ? (
           <ContactListSkeleton count={4} />
-        ) : error && sectors.length === 0 ? (
+        ) : error && availableSectors.length === 0 ? (
           <div className="wa-forward-modal__state">
             <p>{error}</p>
           </div>
@@ -103,9 +107,13 @@ const ForwardConversationModal: React.FC<ForwardConversationModalProps> = ({
           <div className="wa-forward-modal__state">
             <p>Nenhum setor ativo cadastrado.</p>
           </div>
+        ) : availableSectors.length === 0 ? (
+          <div className="wa-forward-modal__state">
+            <p>Não há outros setores disponíveis para encaminhar.</p>
+          </div>
         ) : (
           <IonList className="wa-forward-modal__list">
-            {sectors.map((sector) => (
+            {availableSectors.map((sector) => (
               <IonItem
                 key={sector.id}
                 button
@@ -124,7 +132,7 @@ const ForwardConversationModal: React.FC<ForwardConversationModalProps> = ({
           </IonList>
         )}
 
-        {error && sectors.length > 0 && (
+        {error && availableSectors.length > 0 && (
           <div className="wa-forward-modal__error">
             <p>{error}</p>
           </div>

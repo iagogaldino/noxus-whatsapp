@@ -111,6 +111,7 @@ const ChatDetail: React.FC = () => {
       <ForwardConversationModal
         isOpen={forwardModalOpen}
         chatName={conversation.participant.name}
+        currentSectorId={conversation.assignedSector?.id ?? null}
         onClose={() => setForwardModalOpen(false)}
         onSelectSector={(sectorId) => forwardConversation(id, sectorId)}
       />
