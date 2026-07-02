@@ -1,5 +1,5 @@
 import { IonContent, IonFooter, IonPage } from '@ionic/react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import ChatHeader from '../components/ChatHeader';
 import MessageBubble from '../components/MessageBubble';
@@ -14,17 +14,53 @@ const ChatDetail: React.FC = () => {
 
   const conversation = getConversation(id);
   const messages = getMessages(id);
+  const lastMessageId = messages[messages.length - 1]?.id;
+
+  const scrollToBottom = useCallback(async () => {
+    const content = contentRef.current;
+    if (!content) return;
+
+    await content.scrollToBottom(0);
+  }, []);
+
+  const scrollToBottomWithRetries = useCallback(() => {
+    const timeouts: ReturnType<typeof setTimeout>[] = [];
+
+    const schedule = (delay: number) => {
+      timeouts.push(
+        setTimeout(() => {
+          void scrollToBottom();
+        }, delay),
+      );
+    };
+
+    void scrollToBottom();
+    schedule(50);
+    schedule(150);
+    schedule(400);
+
+    return () => {
+      for (const timeout of timeouts) {
+        clearTimeout(timeout);
+      }
+    };
+  }, [scrollToBottom]);
 
   useEffect(() => {
-    if (id) {
-      void loadChatHistory(id);
-      markAsRead(id);
-    }
-  }, [id, markAsRead, loadChatHistory]);
+    if (!id) return;
+
+    markAsRead(id);
+
+    void loadChatHistory(id).finally(() => {
+      scrollToBottomWithRetries();
+    });
+  }, [id, markAsRead, loadChatHistory, scrollToBottomWithRetries]);
 
   useEffect(() => {
-    contentRef.current?.scrollToBottom(300);
-  }, [messages.length]);
+    if (!id || !conversation) return;
+
+    return scrollToBottomWithRetries();
+  }, [id, conversation, messages.length, lastMessageId, scrollToBottomWithRetries]);
 
   if (!conversation) {
     return (
