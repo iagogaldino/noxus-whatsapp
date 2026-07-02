@@ -745,6 +745,42 @@
   font-size: 0.9rem;
 }
 
+.admin-form__phone-field {
+  margin-bottom: 10px;
+}
+
+.admin-form__phone-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--admin-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-form__phone-input {
+  background: #f0f2f5;
+  border: 1.5px solid var(--admin-border);
+  border-radius: 10px;
+  padding: 4px 8px 4px 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.admin-form__phone-input:focus-within {
+  border-color: var(--admin-accent);
+  box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+  background: #ffffff;
+}
+
+.admin-form__phone-input .phone-input__country {
+  background: #ffffff;
+}
+
+.admin-form__phone-input:focus-within .phone-input__country {
+  background: #f5f6f6;
+}
+
 /* ── Buttons ── */
 .admin-btn-primary {
   --background: var(--admin-primary);

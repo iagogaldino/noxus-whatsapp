@@ -5,7 +5,7 @@ import { AppError } from './error.middleware.js';
 
 export interface AuthPayload {
   userId: string;
-  email: string;
+  phone: string;
   role: 'admin' | 'employee';
 }
 

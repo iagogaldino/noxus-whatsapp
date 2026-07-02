@@ -2,7 +2,7 @@ import { EmployeeRole } from '../admin/types/employee';
 
 export interface AuthUser {
   id: string;
-  email: string;
+  phone: string;
   name: string;
   role: EmployeeRole;
 }
@@ -19,7 +19,7 @@ export interface AuthMeResponse {
 export interface AuthSession {
   token: string;
   userId: string;
-  email: string;
+  phone: string;
   name: string;
   role: EmployeeRole;
   loggedInAt: string;

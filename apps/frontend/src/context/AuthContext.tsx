@@ -9,12 +9,19 @@ interface LoginResult {
   role?: AuthSession['role'];
 }
 
+interface RequestOtpResult {
+  success: boolean;
+  error?: string;
+  expiresInSeconds?: number;
+}
+
 interface AuthContextValue {
   session: AuthSession | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginResult>;
+  requestOtp: (phone: string) => Promise<RequestOtpResult>;
+  verifyOtp: (phone: string, code: string) => Promise<LoginResult>;
   logout: () => void;
 }
 
@@ -24,7 +31,7 @@ function buildSession(token: string, user: AuthUser): AuthSession {
   return {
     token,
     userId: user.id,
-    email: user.email,
+    phone: user.phone,
     name: user.name,
     role: user.role,
     loggedInAt: new Date().toISOString(),
@@ -76,9 +83,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
-  const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
+  const requestOtp = useCallback(async (phone: string): Promise<RequestOtpResult> => {
     try {
-      const { token, user } = await authApi.login(email, password);
+      const result = await authApi.requestOtp(phone);
+      return { success: true, expiresInSeconds: result.expiresInSeconds };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao enviar código.';
+      return { success: false, error: message };
+    }
+  }, []);
+
+  const verifyOtp = useCallback(async (phone: string, code: string): Promise<LoginResult> => {
+    try {
+      const { token, user } = await authApi.verifyOtp(phone, code);
       const newSession = buildSession(token, user);
       saveSession(newSession);
       setSession(newSession);
@@ -100,10 +117,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isAuthenticated: !!session,
       isAdmin: session?.role === 'admin',
       isLoading,
-      login,
+      requestOtp,
+      verifyOtp,
       logout,
     }),
-    [session, isLoading, login, logout],
+    [session, isLoading, requestOtp, verifyOtp, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,18 +2,19 @@ import { Schema, model, type InferSchemaType } from 'mongoose';
 
 const userSchema = new Schema(
   {
-    email: {
+    phone: {
       type: String,
       required: true,
       unique: true,
-      lowercase: true,
       trim: true,
       index: true,
     },
-    passwordHash: {
+    email: {
       type: String,
-      required: true,
-      select: false,
+      lowercase: true,
+      trim: true,
+      sparse: true,
+      unique: true,
     },
     name: {
       type: String,
@@ -39,10 +40,6 @@ const userSchema = new Schema(
       ref: 'Sector',
       default: null,
       index: true,
-    },
-    phone: {
-      type: String,
-      trim: true,
     },
   },
   {

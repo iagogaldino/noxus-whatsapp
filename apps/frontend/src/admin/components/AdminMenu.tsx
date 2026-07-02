@@ -10,6 +10,7 @@ import {
 import { useHistory, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useAppNavigate } from '../../utils/navigation';
+import { formatPhoneLabel } from '../../utils/phone';
 
 const AdminMenu: React.FC = () => {
   const history = useHistory();
@@ -59,7 +60,7 @@ const AdminMenu: React.FC = () => {
           <div className="admin-menu__avatar">{session.name.charAt(0).toUpperCase()}</div>
           <div className="admin-menu__user-info">
             <span className="admin-menu__user-name">{session.name}</span>
-            <span className="admin-menu__user-email">{session.email}</span>
+            <span className="admin-menu__user-email">{formatPhoneLabel(session.phone)}</span>
           </div>
         </div>
       )}

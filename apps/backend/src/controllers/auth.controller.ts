@@ -3,15 +3,29 @@ import { z } from 'zod';
 import * as authService from '../services/auth.service.js';
 import { AppError } from '../middleware/error.middleware.js';
 
-const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+const requestOtpSchema = z.object({
+  phone: z.string().min(10).max(20),
 });
 
-export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
+const verifyOtpSchema = z.object({
+  phone: z.string().min(10).max(20),
+  code: z.string().min(4).max(4),
+});
+
+export async function requestOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { email, password } = loginSchema.parse(req.body);
-    const result = await authService.login(email, password);
+    const { phone } = requestOtpSchema.parse(req.body);
+    const result = await authService.requestOtp(phone);
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function verifyOtp(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const { phone, code } = verifyOtpSchema.parse(req.body);
+    const result = await authService.verifyOtp(phone, code);
     res.json(result);
   } catch (err) {
     next(err);

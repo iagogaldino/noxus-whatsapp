@@ -32,10 +32,17 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export async function login(email: string, password: string): Promise<AuthLoginResponse> {
-  return request<AuthLoginResponse>('/api/v1/auth/login', {
+export async function requestOtp(phone: string): Promise<{ ok: boolean; expiresInSeconds: number }> {
+  return request<{ ok: boolean; expiresInSeconds: number }>('/api/v1/auth/otp/request', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ phone }),
+  });
+}
+
+export async function verifyOtp(phone: string, code: string): Promise<AuthLoginResponse> {
+  return request<AuthLoginResponse>('/api/v1/auth/otp/verify', {
+    method: 'POST',
+    body: JSON.stringify({ phone, code }),
   });
 }
 

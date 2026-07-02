@@ -1,5 +1,6 @@
 import { IonButton, IonIcon, IonItem, IonLabel } from '@ionic/react';
 import { createOutline, trashOutline } from 'ionicons/icons';
+import { formatPhoneLabel } from '../../utils/phone';
 import { Employee } from '../types/employee';
 
 interface EmployeeListItemProps {
@@ -12,7 +13,7 @@ const EmployeeListItem: React.FC<EmployeeListItemProps> = ({ employee, onEdit, o
   <IonItem className="admin-employee-item" lines="full">
     <div className="admin-employee-item__main">
       <div className="admin-employee-item__name">{employee.name}</div>
-      <div className="admin-employee-item__email">{employee.email}</div>
+      <div className="admin-employee-item__email">{formatPhoneLabel(employee.phone)}</div>
       <div className="admin-employee-item__meta">
         {employee.department && (
           <span className="admin-badge admin-badge--employee">{employee.department}</span>

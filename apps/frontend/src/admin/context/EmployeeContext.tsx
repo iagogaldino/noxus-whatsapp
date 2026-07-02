@@ -1,7 +1,7 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { seedEmployees } from '../data/mockEmployees';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import * as userApi from '../services/userApi.http';
 import { Employee, EmployeeFormData } from '../types/employee';
-import { loadEmployees, saveEmployees } from '../utils/storage';
+import { isValidWhatsAppPhone, normalizePhoneInput } from '../../utils/phone';
 
 interface EmployeeStats {
   total: number;
@@ -13,43 +13,48 @@ interface EmployeeStats {
 interface EmployeeContextValue {
   employees: Employee[];
   stats: EmployeeStats;
+  isLoading: boolean;
+  error: string | null;
+  refreshEmployees: () => Promise<void>;
   getEmployeeById: (id: string) => Employee | undefined;
-  createEmployee: (data: EmployeeFormData) => { success: boolean; error?: string };
-  updateEmployee: (id: string, data: EmployeeFormData) => { success: boolean; error?: string };
-  deleteEmployee: (id: string) => void;
+  createEmployee: (data: EmployeeFormData) => Promise<{ success: boolean; error?: string }>;
+  updateEmployee: (id: string, data: EmployeeFormData) => Promise<{ success: boolean; error?: string }>;
+  deleteEmployee: (id: string) => Promise<{ success: boolean; error?: string }>;
   searchEmployees: (query: string) => Employee[];
 }
 
 const EmployeeContext = createContext<EmployeeContextValue | null>(null);
 
-function initEmployees(): Employee[] {
-  const stored = loadEmployees<Employee[]>();
-  if (stored && stored.length > 0) return stored;
-  saveEmployees(seedEmployees);
-  return seedEmployees;
-}
-
-function validateForm(data: EmployeeFormData, employees: Employee[], excludeId?: string): string | null {
+function validateForm(data: EmployeeFormData): string | null {
   if (!data.name.trim()) return 'Nome é obrigatório.';
-  if (!data.email.trim()) return 'E-mail é obrigatório.';
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email.trim())) return 'E-mail inválido.';
-
-  const emailTaken = employees.some(
-    (e) => e.email.toLowerCase() === data.email.trim().toLowerCase() && e.id !== excludeId,
-  );
-  if (emailTaken) return 'Este e-mail já está em uso.';
-
-  if (!excludeId && !data.password?.trim()) return 'Senha é obrigatória na criação.';
+  if (!data.phone.trim()) return 'Telefone é obrigatório.';
+  if (!isValidWhatsAppPhone(normalizePhoneInput(data.phone))) {
+    return 'Informe um telefone válido com DDD.';
+  }
   return null;
 }
 
 export const EmployeeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [employees, setEmployees] = useState<Employee[]>(initEmployees);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const persist = useCallback((next: Employee[]) => {
-    setEmployees(next);
-    saveEmployees(next);
+  const refreshEmployees = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const items = await userApi.fetchUsers();
+      setEmployees(items);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Falha ao carregar funcionários.');
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void refreshEmployees();
+  }, [refreshEmployees]);
 
   const stats = useMemo<EmployeeStats>(
     () => ({
@@ -66,63 +71,60 @@ export const EmployeeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [employees],
   );
 
-  const createEmployee = useCallback(
-    (data: EmployeeFormData) => {
-      const error = validateForm(data, employees);
-      if (error) return { success: false, error };
+  const createEmployee = useCallback(async (data: EmployeeFormData) => {
+    const validationError = validateForm(data);
+    if (validationError) return { success: false, error: validationError };
 
-      const now = new Date().toISOString();
-      const newEmployee: Employee = {
-        id: `emp-${Date.now()}`,
+    try {
+      const created = await userApi.createUser({
+        ...data,
+        phone: normalizePhoneInput(data.phone),
         name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        phone: data.phone?.trim() || undefined,
-        department: data.department?.trim() || undefined,
-        role: data.role,
-        status: data.status,
-        password: data.password?.trim(),
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      persist([...employees, newEmployee]);
+      });
+      setEmployees((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
       return { success: true };
-    },
-    [employees, persist],
-  );
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Falha ao criar funcionário.',
+      };
+    }
+  }, []);
 
-  const updateEmployee = useCallback(
-    (id: string, data: EmployeeFormData) => {
-      const error = validateForm(data, employees, id);
-      if (error) return { success: false, error };
+  const updateEmployee = useCallback(async (id: string, data: EmployeeFormData) => {
+    const validationError = validateForm(data);
+    if (validationError) return { success: false, error: validationError };
 
-      const existing = employees.find((e) => e.id === id);
-      if (!existing) return { success: false, error: 'Funcionário não encontrado.' };
-
-      const updated: Employee = {
-        ...existing,
+    try {
+      const updated = await userApi.updateUser(id, {
+        ...data,
+        phone: normalizePhoneInput(data.phone),
         name: data.name.trim(),
-        email: data.email.trim().toLowerCase(),
-        phone: data.phone?.trim() || undefined,
-        department: data.department?.trim() || undefined,
-        role: data.role,
-        status: data.status,
-        password: data.password?.trim() ? data.password.trim() : existing.password,
-        updatedAt: new Date().toISOString(),
-      };
-
-      persist(employees.map((e) => (e.id === id ? updated : e)));
+      });
+      setEmployees((prev) =>
+        prev.map((employee) => (employee.id === id ? updated : employee)).sort((a, b) => a.name.localeCompare(b.name)),
+      );
       return { success: true };
-    },
-    [employees, persist],
-  );
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Falha ao atualizar funcionário.',
+      };
+    }
+  }, []);
 
-  const deleteEmployee = useCallback(
-    (id: string) => {
-      persist(employees.filter((e) => e.id !== id));
-    },
-    [employees, persist],
-  );
+  const deleteEmployee = useCallback(async (id: string) => {
+    try {
+      await userApi.deleteUser(id);
+      setEmployees((prev) => prev.filter((employee) => employee.id !== id));
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Falha ao excluir funcionário.',
+      };
+    }
+  }, []);
 
   const searchEmployees = useCallback(
     (query: string) => {
@@ -131,7 +133,7 @@ export const EmployeeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return employees.filter(
         (e) =>
           e.name.toLowerCase().includes(q) ||
-          e.email.toLowerCase().includes(q) ||
+          normalizePhoneInput(e.phone).includes(q.replace(/\D/g, '')) ||
           e.department?.toLowerCase().includes(q),
       );
     },
@@ -142,13 +144,27 @@ export const EmployeeProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     () => ({
       employees,
       stats,
+      isLoading,
+      error,
+      refreshEmployees,
       getEmployeeById,
       createEmployee,
       updateEmployee,
       deleteEmployee,
       searchEmployees,
     }),
-    [employees, stats, getEmployeeById, createEmployee, updateEmployee, deleteEmployee, searchEmployees],
+    [
+      employees,
+      stats,
+      isLoading,
+      error,
+      refreshEmployees,
+      getEmployeeById,
+      createEmployee,
+      updateEmployee,
+      deleteEmployee,
+      searchEmployees,
+    ],
   );
 
   return <EmployeeContext.Provider value={value}>{children}</EmployeeContext.Provider>;

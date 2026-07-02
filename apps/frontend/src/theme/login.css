@@ -101,6 +101,89 @@
   margin-top: 0;
 }
 
+.login-page__phone-input {
+  background: #f0f2f5;
+  border: 1.5px solid #e9edef;
+  border-radius: 10px;
+  padding: 4px 8px 4px 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.login-page__phone-input:focus-within {
+  border-color: #25d366;
+  box-shadow: 0 0 0 3px rgba(37, 211, 102, 0.15);
+  background: #ffffff;
+}
+
+.phone-input {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.phone-input__country {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 10px;
+  border: none;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111b21;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.phone-input__country:hover {
+  background: #f5f6f6;
+}
+
+.phone-input__flag {
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.phone-input__dial {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #3b4a54;
+}
+
+.phone-input__chevron {
+  font-size: 0.95rem;
+  color: #8696a0;
+}
+
+.phone-input__field {
+  flex: 1;
+  min-width: 0;
+}
+
+.phone-input__field ion-input {
+  --padding-start: 4px;
+  --padding-end: 8px;
+  --padding-top: 10px;
+  --padding-bottom: 10px;
+  font-size: 0.95rem;
+}
+
+.phone-input__popover ion-item h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #111b21;
+}
+
+.phone-input__popover ion-item p {
+  font-size: 0.8rem;
+  color: #667781;
+}
+
+.phone-input__country-option--active {
+  --background: #f0f2f5;
+}
+
 .login-page__input-wrap {
   display: flex;
   align-items: center;
@@ -152,6 +235,23 @@
   font-size: 0.95rem;
   letter-spacing: 0.02em;
   text-transform: none;
+}
+
+.login-page__secondary-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.login-page__phone-hint {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: #667781;
+  text-align: center;
+}
+
+.login-page__phone-hint strong {
+  color: #111b21;
 }
 
 .login-page__demo {

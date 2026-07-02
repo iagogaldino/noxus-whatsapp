@@ -13,6 +13,8 @@ import {
 } from '@ionic/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useHistory, useParams } from 'react-router-dom';
+import PhoneInput from '../../components/PhoneInput';
+import { normalizePhoneInput } from '../../utils/phone';
 import { AdminHeader } from '../components/AdminHeader';
 import { useEmployees } from '../context/EmployeeContext';
 import { useSectors } from '../context/SectorContext';
@@ -20,12 +22,11 @@ import { EmployeeFormData, EmployeeRole, EmployeeStatus } from '../types/employe
 
 const emptyForm: EmployeeFormData = {
   name: '',
-  email: '',
   phone: '',
   department: '',
+  sectorId: null,
   role: 'employee',
   status: 'active',
-  password: '',
 };
 
 const EmployeeForm: React.FC = () => {
@@ -38,12 +39,7 @@ const EmployeeForm: React.FC = () => {
   const [form, setForm] = useState<EmployeeFormData>(emptyForm);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
-
-  const legacyDepartment = useMemo(() => {
-    if (!form.department) return null;
-    const exists = sectors.some((sector) => sector.name === form.department);
-    return exists ? null : form.department;
-  }, [form.department, sectors]);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (isEdit && id) {
@@ -51,26 +47,42 @@ const EmployeeForm: React.FC = () => {
       if (employee) {
         setForm({
           name: employee.name,
-          email: employee.email,
-          phone: employee.phone ?? '',
+          phone: normalizePhoneInput(employee.phone),
           department: employee.department ?? '',
+          sectorId: employee.sectorId ?? null,
           role: employee.role,
           status: employee.status,
-          password: '',
         });
       }
     }
   }, [id, isEdit, getEmployeeById]);
 
+  const legacyDepartment = useMemo(() => {
+    if (!form.department) return null;
+    const exists = sectors.some((sector) => sector.name === form.department);
+    return exists ? null : form.department;
+  }, [form.department, sectors]);
+
   const updateField = <K extends keyof EmployeeFormData>(key: K, value: EmployeeFormData[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSectorChange = (sectorId: string) => {
+    const sector = sectors.find((item) => item.id === sectorId);
+    setForm((prev) => ({
+      ...prev,
+      sectorId: sectorId || null,
+      department: sector?.name ?? '',
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitting(true);
 
-    const result = isEdit && id ? updateEmployee(id, form) : createEmployee(form);
+    const result = isEdit && id ? await updateEmployee(id, form) : await createEmployee(form);
+    setSubmitting(false);
 
     if (result.success) {
       setToast(isEdit ? 'Funcionário atualizado!' : 'Funcionário criado!');
@@ -90,12 +102,10 @@ const EmployeeForm: React.FC = () => {
               {isEdit ? 'Editar dados' : 'Cadastrar funcionário'}
             </h2>
             <p className="admin-form-card__subtitle">
-              {isEdit
-                ? 'Atualize as informações da conta.'
-                : 'Preencha os dados para criar uma nova conta.'}
+              O acesso é feito por OTP no WhatsApp usando o telefone cadastrado.
             </p>
 
-            <form className="admin-form" onSubmit={handleSubmit}>
+            <form className="admin-form" onSubmit={(e) => void handleSubmit(e)}>
               <IonItem className="admin-form__item" lines="none">
                 <IonLabel position="stacked">Nome *</IonLabel>
                 <IonInput
@@ -105,27 +115,19 @@ const EmployeeForm: React.FC = () => {
                 />
               </IonItem>
 
-              <IonItem className="admin-form__item" lines="none">
-                <IonLabel position="stacked">E-mail *</IonLabel>
-                <IonInput
-                  type="email"
-                  value={form.email}
-                  onIonInput={(e) => updateField('email', e.detail.value ?? '')}
-                  required
-                />
-              </IonItem>
+              <div className="admin-form__phone-field">
+                <span className="admin-form__phone-label">Telefone *</span>
+                <div className="admin-form__phone-input">
+                  <PhoneInput
+                    id="employee-phone"
+                    value={form.phone}
+                    onChange={(phone) => updateField('phone', phone)}
+                  />
+                </div>
+              </div>
 
               <IonItem className="admin-form__item" lines="none">
-                <IonLabel position="stacked">Telefone</IonLabel>
-                <IonInput
-                  type="tel"
-                  value={form.phone}
-                  onIonInput={(e) => updateField('phone', e.detail.value ?? '')}
-                />
-              </IonItem>
-
-              <IonItem className="admin-form__item" lines="none">
-                <IonLabel position="stacked">Departamento</IonLabel>
+                <IonLabel position="stacked">Setor</IonLabel>
                 {sectorsLoading ? (
                   <div className="admin-form__inline-loading">
                     <IonSpinner name="crescent" />
@@ -133,18 +135,16 @@ const EmployeeForm: React.FC = () => {
                   </div>
                 ) : (
                   <IonSelect
-                    value={form.department}
+                    value={form.sectorId ?? undefined}
                     placeholder="Selecione um setor"
                     interface="popover"
-                    onIonChange={(e) => updateField('department', e.detail.value ?? '')}
+                    onIonChange={(e) => handleSectorChange(e.detail.value)}
                   >
                     {legacyDepartment && (
-                      <IonSelectOption value={legacyDepartment}>
-                        {legacyDepartment} (não cadastrado)
-                      </IonSelectOption>
+                      <IonSelectOption value="">{legacyDepartment} (não cadastrado)</IonSelectOption>
                     )}
                     {sectors.map((sector) => (
-                      <IonSelectOption key={sector.id} value={sector.name}>
+                      <IonSelectOption key={sector.id} value={sector.id}>
                         {sector.name}
                         {sector.status === 'inactive' ? ' (inativo)' : ''}
                       </IonSelectOption>
@@ -152,11 +152,6 @@ const EmployeeForm: React.FC = () => {
                   </IonSelect>
                 )}
                 {sectorsError && <IonNote color="danger">{sectorsError}</IonNote>}
-                {!sectorsLoading && sectors.length === 0 && (
-                  <IonNote color="medium">
-                    Nenhum setor cadastrado. Cadastre em Setores antes de atribuir.
-                  </IonNote>
-                )}
               </IonItem>
 
               <IonItem className="admin-form__item" lines="none">
@@ -181,23 +176,10 @@ const EmployeeForm: React.FC = () => {
                 </IonSelect>
               </IonItem>
 
-              <IonItem className="admin-form__item" lines="none">
-                <IonLabel position="stacked">
-                  {isEdit ? 'Nova senha (opcional)' : 'Senha *'}
-                </IonLabel>
-                <IonInput
-                  type="password"
-                  value={form.password}
-                  onIonInput={(e) => updateField('password', e.detail.value ?? '')}
-                  placeholder={isEdit ? 'Deixe em branco para manter' : ''}
-                  required={!isEdit}
-                />
-              </IonItem>
-
               {error && <p className="admin-form__error">{error}</p>}
 
-              <IonButton expand="block" type="submit" className="admin-btn-primary">
-                Salvar
+              <IonButton expand="block" type="submit" className="admin-btn-primary" disabled={submitting}>
+                {submitting ? 'Salvando…' : 'Salvar'}
               </IonButton>
               <IonButton
                 expand="block"

@@ -4,5 +4,6 @@ import { authMiddleware } from '../middleware/auth.middleware.js';
 
 export const authRoutes = Router();
 
-authRoutes.post('/login', authController.login);
+authRoutes.post('/otp/request', authController.requestOtp);
+authRoutes.post('/otp/verify', authController.verifyOtp);
 authRoutes.get('/me', authMiddleware, authController.me);
