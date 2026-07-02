@@ -4,10 +4,20 @@ import * as chatPersistence from '../services/chat-persistence.service.js';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
-const sendMessageSchema = z.object({
-  phoneNumber: z.string().min(10).max(15),
-  message: z.string().min(1).max(200),
-});
+const sendMessageSchema = z
+  .object({
+    phoneNumber: z.string().optional(),
+    chatId: z.string().optional(),
+    message: z.string().min(1).max(200),
+  })
+  .refine(
+    (data) => {
+      const phone = data.phoneNumber?.trim() ?? '';
+      const chat = data.chatId?.trim() ?? '';
+      return (phone.length >= 10 && phone.length <= 15) || chat.length > 0;
+    },
+    { message: 'Informe chatId ou phoneNumber válido.' },
+  );
 
 const createInstanceSchema = z.object({
   name: z.string().min(1).max(100).optional(),
@@ -158,9 +168,18 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
   try {
     const body = sendMessageSchema.parse(req.body);
     const instanceId = await saasWhatsApp.resolveInstanceId();
-    await saasWhatsApp.sendMessage(instanceId, body.phoneNumber, body.message);
 
-    const chatId = saasWhatsApp.normalizePhone(body.phoneNumber);
+    const phoneNumber =
+      body.phoneNumber && saasWhatsApp.normalizePhone(body.phoneNumber).length >= 10
+        ? saasWhatsApp.normalizePhone(body.phoneNumber)
+        : await chatPersistence.resolveOutboundPhone(instanceId, body.chatId!);
+
+    const chatId = body.chatId?.trim()
+      ? chatPersistence.normalizeChatId(body.chatId)
+      : phoneNumber;
+
+    await saasWhatsApp.sendMessage(instanceId, phoneNumber, body.message);
+
     const messageId = `local-${Date.now()}`;
     await chatPersistence.saveMessage({
       instanceId,
@@ -169,7 +188,6 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
       fromMe: true,
       text: body.message,
       timestamp: new Date(),
-      participantName: chatId,
     });
 
     res.json({ ok: true, messageId });

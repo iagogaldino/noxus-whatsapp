@@ -74,10 +74,10 @@ export async function fetchConversationMessages(
   return authRequest<ConversationMessagesResponse>(path);
 }
 
-export async function sendMessageRest(phoneNumber: string, message: string): Promise<void> {
+export async function sendMessageRest(chatId: string, message: string): Promise<void> {
   await authRequest('/api/v1/whatsapp/messages/send', {
     method: 'POST',
-    body: JSON.stringify({ phoneNumber, message }),
+    body: JSON.stringify({ chatId, message }),
   });
 }
 

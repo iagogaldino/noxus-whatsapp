@@ -118,9 +118,13 @@ export async function logout(instanceId: string): Promise<void> {
   await saasRequest(`${instancePath(instanceId)}/whatsapp/logout`, { method: 'POST' });
 }
 
-export async function getContacts(instanceId: string): Promise<SaasWhatsAppContact[]> {
+export async function getContacts(
+  instanceId: string,
+  options: { filter?: 'named' | 'all' } = {},
+): Promise<SaasWhatsAppContact[]> {
+  const params = options.filter === 'all' ? '?filter=all' : '';
   const { data } = await saasRequest<SaasWhatsAppContact[] | { items?: SaasWhatsAppContact[] }>(
-    `${instancePath(instanceId)}/whatsapp/contacts`,
+    `${instancePath(instanceId)}/whatsapp/contacts${params}`,
   );
   if (Array.isArray(data)) return data;
   return data.items ?? [];

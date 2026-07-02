@@ -363,12 +363,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const phoneNumber = normalizePhone(chatId);
       let result = await chatSocket.sendMessage(chatId, trimmed);
 
       if (!result.ok) {
         try {
-          await sendMessageRest(phoneNumber, trimmed);
+          await sendMessageRest(chatId, trimmed);
           appendMessage({
             id: `${chatId}-local-${Date.now()}`,
             chatId,

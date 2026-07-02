@@ -97,7 +97,7 @@ class WhatsAppSocketBridge {
   }
 
   sendMessage(
-    chatId: string,
+    phoneNumber: string,
     text: string,
   ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
     return new Promise((resolve) => {
@@ -106,14 +106,19 @@ class WhatsAppSocketBridge {
         return;
       }
 
-      const phoneNumber = normalizePhone(chatId);
+      const normalized = normalizePhone(phoneNumber);
+      if (normalized.length < 10) {
+        resolve({ ok: false, error: 'Número do destinatário inválido.' });
+        return;
+      }
+
       const timeout = setTimeout(() => {
         resolve({ ok: false, error: 'Timeout ao enviar mensagem.' });
       }, 15000);
 
       this.saasSocket.emit(
         'whatsapp.message.send',
-        { phoneNumber, text },
+        { phoneNumber: normalized, text },
         (ack: SaasSendMessageAck) => {
           clearTimeout(timeout);
           if (ack?.ok === false || ack?.error) {

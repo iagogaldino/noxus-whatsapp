@@ -3,8 +3,8 @@ import jwt from 'jsonwebtoken';
 import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
-import { normalizePhone, resolveInstanceId } from '../services/saas-whatsapp.service.js';
-import { saveMessage } from '../services/chat-persistence.service.js';
+import { resolveInstanceId } from '../services/saas-whatsapp.service.js';
+import { resolveOutboundPhone, saveMessage } from '../services/chat-persistence.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -70,47 +70,47 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
 
     socket.on('chat:message:send', async (data: { chatId: string; text: string }, ack) => {
       const trimmed = data.text?.trim();
-      if (!trimmed || !data.chatId) {
+      if (!trimmed || !data.chatId?.trim()) {
         ack?.({ ok: false, error: 'Dados inválidos.' });
         return;
       }
 
       try {
-        const result = await whatsappSocketBridge.sendMessage(data.chatId, trimmed);
+        const instanceId = await resolveInstanceId();
+        const phoneNumber = await resolveOutboundPhone(instanceId, data.chatId);
+        const result = await whatsappSocketBridge.sendMessage(phoneNumber, trimmed);
         if (!result.ok) {
           ack?.({ ok: false, error: result.error ?? 'Falha ao enviar.' });
           return;
         }
 
+        const chatId = data.chatId.trim();
         const sent: ChatMessageSentEvent = {
           id: result.messageId ?? `local-${Date.now()}`,
-          chatId: normalizePhone(data.chatId),
+          chatId,
           text: trimmed,
           senderId: auth.userId,
           timestamp: new Date().toISOString(),
           status: 'sent',
         };
 
-        void resolveInstanceId()
-          .then((instanceId) =>
-            saveMessage({
-              instanceId,
-              chatId: sent.chatId,
-              externalId: sent.id,
-              fromMe: true,
-              text: sent.text,
-              timestamp: sent.timestamp,
-              participantName: sent.chatId,
-            }),
-          )
-          .catch((err) => {
-            console.error('[Chat] Erro ao persistir mensagem enviada:', err);
-          });
+        void saveMessage({
+          instanceId,
+          chatId,
+          externalId: sent.id,
+          fromMe: true,
+          text: sent.text,
+          timestamp: sent.timestamp,
+        }).catch((err) => {
+          console.error('[Chat] Erro ao persistir mensagem enviada:', err);
+        });
 
         io?.to('whatsapp-chat').emit('chat:message:sent', sent);
         ack?.({ ok: true, message: sent });
-      } catch {
-        ack?.({ ok: false, error: 'Falha ao enviar mensagem.' });
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : 'Falha ao enviar mensagem.';
+        ack?.({ ok: false, error: message });
       }
     });
   });

@@ -1,5 +1,6 @@
 import { ChatConversation } from '../models/ChatConversation.js';
 import { ChatMessage } from '../models/ChatMessage.js';
+import { AppError } from '../middleware/error.middleware.js';
 import type {
   SaasConversationMessage,
   SaasConversationMessagesResponse,
@@ -20,6 +21,18 @@ export function nameAliasChatId(contactName: string): string {
 export function normalizeChatId(chatId: string): string {
   if (chatId.startsWith('name:')) return chatId;
   return normalizePhone(chatId) || chatId;
+}
+
+export function isValidPhone(phone: string): boolean {
+  const digits = normalizePhone(phone);
+  return digits.length >= 10 && digits.length <= 15;
+}
+
+export function phoneFromChatId(chatId: string): string | null {
+  const normalized = normalizeChatId(chatId);
+  if (normalized.startsWith('name:')) return null;
+  const phone = normalizePhone(normalized);
+  return isValidPhone(phone) ? phone : null;
 }
 
 function toJid(chatId: string): string {
@@ -87,6 +100,8 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
   );
 
   const existing = await ChatConversation.findOne({ instanceId: input.instanceId, chatId });
+  const resolvedPhone = phoneFromChatId(chatId) ?? existing?.phoneNumber;
+
   if (!existing || timestamp >= existing.lastMessageAt) {
     await ChatConversation.findOneAndUpdate(
       { instanceId: input.instanceId, chatId },
@@ -98,11 +113,16 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
         lastMessageExternalId: input.externalId,
         lastMessageText: input.text,
         lastMessageFromMe: input.fromMe,
+        ...(resolvedPhone ? { phoneNumber: resolvedPhone } : {}),
       },
       { upsert: true, new: true },
     );
   } else if (input.participantName && existing.participantName === existing.chatId) {
     existing.participantName = input.participantName;
+    if (resolvedPhone) existing.phoneNumber = resolvedPhone;
+    await existing.save();
+  } else if (resolvedPhone && !existing.phoneNumber) {
+    existing.phoneNumber = resolvedPhone;
     await existing.save();
   }
 }
@@ -259,6 +279,14 @@ async function mergeNameAliasConversation(
     { $set: { chatId: identity.chatId, jid: toJid(identity.chatId) } },
   );
   await ChatConversation.deleteOne({ instanceId, chatId: aliasChatId });
+
+  const phone = phoneFromChatId(identity.chatId);
+  if (phone) {
+    await ChatConversation.updateOne(
+      { instanceId, chatId: identity.chatId },
+      { $set: { phoneNumber: phone } },
+    );
+  }
 }
 
 async function deduplicateNameAliasConversations(instanceId: string): Promise<void> {
@@ -404,27 +432,87 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
 }
 
 const contactPhoneByName = new Map<string, string>();
+const contactIndexLoaded = new Set<string>();
+
+function cacheContactPhone(instanceId: string, label: string, phone: string): void {
+  const trimmed = label.trim();
+  if (!trimmed || !phone) return;
+  contactPhoneByName.set(`${instanceId}:${trimmed.toLowerCase()}`, phone);
+  contactPhoneByName.set(`${instanceId}:${slugifyContactName(trimmed)}`, phone);
+}
+
+async function loadContactPhoneIndex(instanceId: string): Promise<void> {
+  if (contactIndexLoaded.has(instanceId)) return;
+
+  const { getContacts } = await import('./saas-whatsapp.service.js');
+  const contacts = await getContacts(instanceId, { filter: 'all' });
+  for (const contact of contacts) {
+    const phone = normalizePhone(contact.jid ?? contact.phone ?? contact.id);
+    if (!isValidPhone(phone)) continue;
+
+    for (const label of [contact.name, contact.notify]) {
+      if (label) cacheContactPhone(instanceId, label, phone);
+    }
+  }
+  contactIndexLoaded.add(instanceId);
+}
 
 async function lookupChatIdByContactName(
   instanceId: string,
   contactName: string,
 ): Promise<string | null> {
-  const cacheKey = `${instanceId}:${contactName.toLowerCase().trim()}`;
-  const cached = contactPhoneByName.get(cacheKey);
-  if (cached) return cached;
+  const trimmed = contactName.trim();
+  if (!trimmed) return null;
 
   try {
-    const { getContacts } = await import('./saas-whatsapp.service.js');
-    const contacts = await getContacts(instanceId);
-    for (const contact of contacts) {
-      const name = (contact.name ?? contact.notify ?? '').toLowerCase().trim();
-      const phone = normalizePhone(contact.jid ?? contact.phone ?? contact.id);
-      if (!name || !phone) continue;
-      contactPhoneByName.set(`${instanceId}:${name}`, phone);
-    }
+    await loadContactPhoneIndex(instanceId);
   } catch {
     return null;
   }
 
-  return contactPhoneByName.get(cacheKey) ?? null;
+  return (
+    contactPhoneByName.get(`${instanceId}:${trimmed.toLowerCase()}`) ??
+    contactPhoneByName.get(`${instanceId}:${slugifyContactName(trimmed)}`) ??
+    null
+  );
+}
+
+export async function resolveOutboundPhone(instanceId: string, chatId: string): Promise<string> {
+  const normalizedChatId = normalizeChatId(chatId);
+
+  const directPhone = phoneFromChatId(normalizedChatId);
+  if (directPhone) return directPhone;
+
+  const conversation = await ChatConversation.findOne({
+    instanceId,
+    chatId: normalizedChatId,
+  }).lean();
+
+  if (conversation?.phoneNumber && isValidPhone(conversation.phoneNumber)) {
+    return normalizePhone(conversation.phoneNumber);
+  }
+
+  const contactName =
+    conversation?.participantName ??
+    (normalizedChatId.startsWith('name:')
+      ? normalizedChatId.slice(5).replace(/-/g, ' ')
+      : null);
+
+  if (contactName) {
+    const phoneFromContacts = await lookupChatIdByContactName(instanceId, contactName);
+    if (phoneFromContacts) {
+      if (normalizedChatId.startsWith('name:')) {
+        await mergeNameAliasConversation(instanceId, {
+          chatId: phoneFromContacts,
+          participantName: contactName,
+        });
+      }
+      return phoneFromContacts;
+    }
+  }
+
+  throw new AppError(
+    400,
+    'Não foi possível resolver o número do contato. Verifique se o contato está na agenda do WhatsApp.',
+  );
 }
