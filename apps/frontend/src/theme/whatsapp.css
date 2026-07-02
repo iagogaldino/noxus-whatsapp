@@ -338,17 +338,18 @@ ion-app {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.5rem;
   color: var(--wa-text-secondary);
   cursor: pointer;
   flex-shrink: 0;
-  width: 42px;
-  height: 42px;
+  width: 22px;
+  height: 22px;
+  font-size: 22px;
+  --ionicon-stroke-width: 28px;
 }
 
 .wa-input-bar__send {
-  width: 42px;
-  height: 42px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: var(--wa-teal);
   display: flex;
@@ -361,7 +362,9 @@ ion-app {
 
 .wa-input-bar__send ion-icon {
   color: white;
-  font-size: 1.2rem;
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
 }
 
 .wa-footer {
