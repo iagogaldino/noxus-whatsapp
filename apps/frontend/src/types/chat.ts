@@ -8,7 +8,7 @@ export interface User {
 
 export type MessageStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
 
-export type MessageType = 'text' | 'image' | 'file';
+export type MessageType = 'text' | 'image' | 'file' | 'audio';
 
 export interface MessageAttachment {
   name: string;

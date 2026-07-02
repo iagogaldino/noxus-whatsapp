@@ -1,7 +1,8 @@
-import type { Message } from '../types/chat';
+import type { Message, MessageType } from '../types/chat';
 import {
   extractMediaFileName,
   normalizeMediaMessageText,
+  resolveMessageTypeFromApi,
 } from '../utils/message';
 import { formatPhoneLabel, isValidWhatsAppPhone } from '../utils/phone';
 import { authRequest, API_BASE, getAuthToken, parseError } from './apiClient';
@@ -38,6 +39,7 @@ export interface ConversationMessagesResponse {
     mediaMimeType?: string;
     mediaFileName?: string;
     mediaSize?: number;
+    mediaGridFsId?: string;
   }>;
   nextCursor?: string | null;
 }
@@ -61,14 +63,7 @@ function normalizePhone(jidOrPhone: string): string {
 function resolveApiMessageType(
   msg: ConversationMessagesResponse['items'][number],
 ): Message['type'] {
-  if (msg.mediaUrl || msg.mediaMimeType) {
-    return msg.mediaMimeType?.startsWith('image/') ? 'image' : 'file';
-  }
-  if (msg.type.includes('image')) return 'image';
-  if (msg.type.includes('document') || msg.type.includes('video') || msg.type.includes('audio')) {
-    return 'file';
-  }
-  return 'text';
+  return resolveMessageTypeFromApi(msg.mediaMimeType, msg.mediaFileName, msg.type);
 }
 
 export function mapApiMessageToChat(
@@ -79,12 +74,11 @@ export function mapApiMessageToChat(
   const type = resolveApiMessageType(msg);
   const fileName =
     extractMediaFileName(msg.text, msg.mediaFileName) ??
-    (type === 'image' ? 'foto' : 'arquivo');
-  const hasMedia = Boolean(msg.mediaUrl || msg.mediaMimeType);
-  const displayType: Message['type'] = type === 'image' ? 'image' : 'file';
-  const text = hasMedia
-    ? normalizeMediaMessageText(msg.text, displayType, fileName)
-    : msg.text;
+    (type === 'image' ? 'foto' : type === 'audio' ? 'audio.ogg' : 'arquivo');
+  const hasMedia = Boolean(msg.mediaUrl || msg.mediaMimeType || msg.mediaGridFsId);
+  const mediaType: Exclude<MessageType, 'text'> =
+    type === 'image' || type === 'audio' || type === 'file' ? type : 'file';
+  const text = hasMedia ? normalizeMediaMessageText(msg.text, mediaType, fileName) : msg.text;
 
   return {
     id: msg.id,

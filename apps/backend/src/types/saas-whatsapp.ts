@@ -35,6 +35,9 @@ export interface SaasConversationMessage {
   type: string;
   mediaUrl?: string;
   mediaMimeType?: string;
+  mediaFileName?: string;
+  mediaSize?: number;
+  mediaGridFsId?: string;
 }
 
 export interface SaasConversationMessagesResponse {
@@ -53,6 +56,13 @@ export interface SaasConversationsResponse {
   items: SaasConversationSummary[];
 }
 
+export interface SaasIncomingMedia {
+  fileBuffer: unknown;
+  mimeType: string;
+  fileName: string;
+  size: number;
+}
+
 export interface SaasIncomingMessageEvent {
   messageId: string;
   from: string;
@@ -62,6 +72,7 @@ export interface SaasIncomingMessageEvent {
   userId: string;
   instanceId: string;
   jid?: string;
+  media?: SaasIncomingMedia;
 }
 
 export interface SaasSendMessageAck {

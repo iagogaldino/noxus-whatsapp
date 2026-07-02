@@ -643,6 +643,34 @@ ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
   color: var(--wa-text-secondary);
 }
 
+.wa-bubble__audio {
+  min-width: 220px;
+  max-width: 280px;
+}
+
+.wa-bubble__audio-player {
+  display: block;
+  width: 100%;
+  height: 36px;
+}
+
+.wa-bubble__audio-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 2px;
+  color: var(--wa-text-secondary);
+}
+
+.wa-bubble__audio-placeholder-icon {
+  font-size: 1.25rem;
+}
+
+.wa-bubble__audio-placeholder-text {
+  font-size: 0.8rem;
+}
+
 .wa-bubble__caption {
   font-size: 0.9rem;
   color: var(--wa-text-primary);

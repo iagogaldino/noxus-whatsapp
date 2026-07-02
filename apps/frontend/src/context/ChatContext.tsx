@@ -48,6 +48,26 @@ function buildPlaceholderMessage(chatId: string, text: string): Message {
   };
 }
 
+function messageFromIncomingEvent(event: ChatMessageReceivedEvent): Message {
+  return {
+    id: event.id,
+    chatId: event.chatId,
+    text: event.text,
+    senderId: event.senderId,
+    timestamp: new Date(event.timestamp),
+    status: 'delivered',
+    type: event.type ?? 'text',
+    attachment: event.attachment
+      ? {
+          name: event.attachment.name,
+          mimeType: event.attachment.mimeType,
+          size: event.attachment.size,
+          url: '',
+        }
+      : undefined,
+  };
+}
+
 interface ChatContextValue {
   currentUser: User;
   conversations: Conversation[];
@@ -196,15 +216,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleIncoming = useCallback(
     (event: ChatMessageReceivedEvent) => {
-      const message: Message = {
-        id: event.id,
-        chatId: event.chatId,
-        text: event.text,
-        senderId: event.senderId,
-        timestamp: new Date(event.timestamp),
-        status: 'delivered',
-        type: 'text',
-      };
+      const message = messageFromIncomingEvent(event);
 
       setConversations((prev) => {
         const existing = prev.find((c) => c.id === event.chatId);
@@ -235,15 +247,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const handleEmployeeIncoming = useCallback(
     (event: ChatMessageReceivedEvent) => {
-      const message: Message = {
-        id: event.id,
-        chatId: event.chatId,
-        text: event.text,
-        senderId: event.senderId,
-        timestamp: new Date(event.timestamp),
-        status: 'delivered',
-        type: 'text',
-      };
+      const message = messageFromIncomingEvent(event);
 
       if (conversationsRef.current.some((conversation) => conversation.id === event.chatId)) {
         appendMessage(message);

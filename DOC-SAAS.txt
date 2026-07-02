@@ -1,0 +1,416 @@
+API Docs
+Inicio
+Documentação da API
+Referência oficial da plataforma de mensagens WhatsApp com múltiplas instâncias por usuário.
+
+Fluxo recomendado: criar/listar instâncias, conectar com QR, enviar mensagens e consumir eventos em tempo real.
+
+Pareamento por QR (REST): integrações podem listar ou criar instâncias, iniciar o pareamento e obter o QR via HTTP (Bearer com JWT ou chave otp_…) — ver secção dedicada.
+
+Nesta página
+
+Autenticação (JWT)
+Tokens de API
+Instâncias e conexão
+Pareamento por QR (REST)
+Contatos da agenda (REST)
+Mensagens por conversa (REST)
+Envio de mensagem
+Envio de arquivo
+Payload: mensagem recebida
+Webhook (mensagens recebidas)
+Socket.IO em tempo real
+article
+Autenticação (JWT)
+Para obter o JWT de sessão, use os endpoints de autenticação em /api/v1/auth. O token retornado no campo token deve ser enviado como Authorization: Bearer <jwt>.
+
+# Login (obter JWT de sessão)
+POST https://saas-whatsapp-api.onrender.com/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "usuario@exemplo.com",
+  "password": "Senha@123456"
+}
+
+# Resposta 200:
+# {
+#   "user": {
+#     "id": "<userId>",
+#     "email": "usuario@exemplo.com"
+#   },
+#   "token": "<jwt-de-sessao>"
+# }
+# Registro (também retorna JWT de sessão)
+POST https://saas-whatsapp-api.onrender.com/api/v1/auth/register
+Content-Type: application/json
+
+{
+  "email": "novo@exemplo.com",
+  "password": "Senha@123456"
+}
+
+# Resposta 201:
+# {
+#   "user": {
+#     "id": "<userId>",
+#     "email": "novo@exemplo.com"
+#   },
+#   "token": "<jwt-de-sessao>"
+# }
+article
+Tokens de API
+Use JWT de sessão para administrar os seus tokens e, depois, use o token gerado (otp_...) como Bearer nas demais rotas da API.
+
+Endpoints de gerenciamento de token (somente usuário autenticado): POST /api/v1/tokens, GET /api/v1/tokens e DELETE /api/v1/tokens/:id.
+
+# 1) Criar token (JWT obrigatório)
+POST https://saas-whatsapp-api.onrender.com/api/v1/tokens
+Authorization: Bearer <jwt-sessao>
+Content-Type: application/json
+
+{
+  "name": "Integracao CRM"
+}
+
+# Resposta 201:
+# {
+#   "id": "<tokenId>",
+#   "name": "Integracao CRM",
+#   "key": "otp_xxxxxxxxxxxx_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+#   "createdAt": "2026-04-30T12:00:00.000Z"
+# }
+
+# 2) Listar tokens do usuário (JWT obrigatório)
+GET https://saas-whatsapp-api.onrender.com/api/v1/tokens
+Authorization: Bearer <jwt-sessao>
+
+# Resposta 200:
+# {
+#   "items": [
+#     {
+#       "id": "<tokenId>",
+#       "name": "Integracao CRM",
+#       "keyPrefix": "a1b2c3d4e5f6",
+#       "maskedPreview": "otp_a1b2c3d4e5f6...",
+#       "createdAt": "2026-04-30T12:00:00.000Z",
+#       "lastUsedAt": null
+#     }
+#   ]
+# }
+
+# 3) Revogar token (JWT obrigatório)
+DELETE https://saas-whatsapp-api.onrender.com/api/v1/tokens/<tokenId>
+Authorization: Bearer <jwt-sessao>
+# Resposta 204 (sem corpo)
+
+# 4) Usar o token gerado nas outras rotas
+GET https://saas-whatsapp-api.onrender.com/api/v1/instances
+Authorization: Bearer <otp_...>
+Atenção: o valor completo do token (key) é retornado apenas na criação. Guarde esse valor em local seguro.
+
+article
+Instâncias e conexão
+A chave de API é global da conta. O escopo da operação é definido por instanceId (ObjectId ou código da instância).
+
+# Listar instâncias
+GET https://saas-whatsapp-api.onrender.com/api/v1/instances
+Authorization: Bearer <token-ou-api-key>
+
+# Criar instância
+POST https://saas-whatsapp-api.onrender.com/api/v1/instances
+Authorization: Bearer <jwt-ou-api-key>
+Content-Type: application/json
+{ "name": "Atendimento Comercial" }
+
+# Endpoints WhatsApp (pareamento e agenda; detalhes em Pareamento por QR e Contatos)
+POST https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/pairing/start
+GET  https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/status
+GET  https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/qr
+GET  https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/contacts[?filter=named|all]
+
+# Atualizar foto de perfil (JWT apenas, multipart)
+PUT  https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/profile-photo
+Content-Type: multipart/form-data (campo: photo)
+article
+Pareamento por QR (REST)
+Autenticação: Authorization: Bearer <JWT de sessão ou chave de API otp_…>. O segmento instanceId no path pode ser o ObjectId da instância ou o código (ex. inst-a1b2c3d4).
+
+Passos: (1) GET /api/v1/instances ou POST /api/v1/instances para obter o id/código. (2) POST …/whatsapp/pairing/start para iniciar o pareamento. (3) Em loop a cada cerca de 1–2s, chamar GET …/whatsapp/status e GET …/whatsapp/qr até whatsappReady: true, ou interromper após timeout. Enquanto o QR ainda não existir, qr será null; o payload pode ser renovado (novo escaneamento se expirar).
+
+POST …/pairing/start: responde 200 com alreadyConnected: true se a sessão já estiver conectada, ou 202 com alreadyConnected: false ao iniciar pareamento. GET …/qr devolve { "qr": string | null } — a string é o conteúdo bruto do QR; no cliente, gere a imagem com uma biblioteca de QR (não é URL nem PNG da API). Para desconectar: POST …/whatsapp/logout (também com Bearer).
+
+Depois de whatsappReady: true, a sessão pode sincronizar contatos na agenda WhatsApp; para listá-los via REST use GET …/whatsapp/contacts — mesma autenticação Bearer (Contatos da agenda (REST)).
+
+Para trocar a foto da conta conectada, use PUT …/whatsapp/profile-photo com token de sessão (JWT) e upload multipart/form-data no campo photo (JPG/PNG/WEBP até 2MB).
+
+# Exemplo: iniciar e acompanhar (ajuste <instanceId> e o token)
+export API_BASE='https://saas-whatsapp-api.onrender.com'
+export TOKEN='sua_chave_ou_jwt'
+export INST='<instanceId-ou-codigo-inst-xxx>'
+
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  -X POST "$API_BASE/api/v1/instances/$INST/whatsapp/pairing/start"
+
+# Em seguida, em loop até whatsappReady ou até obter "qr" não nulo:
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$API_BASE/api/v1/instances/$INST/whatsapp/status"
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$API_BASE/api/v1/instances/$INST/whatsapp/qr"
+article
+Contatos da agenda (REST)
+Endpoint: GET /api/v1/instances/<instanceId>/whatsapp/contacts. Autenticação: Authorization: Bearer <JWT de sessão ou chave de API otp_…>; o instanceId segue as mesmas regras das outras rotas (ObjectId ou código da instância).
+
+Query: filter opcional — named (omissão, igual à rota já existente): só contactos com nome de agenda gravado não vazio, ordenados por nome ascendente. filter=all: todos os contactos de utilizador (@s.whatsapp.net) já persistidos para a instância (inclui sem nome na agenda), ordenação por nome e JID. Pode responder { "items": [] } até existir dados na base.
+
+O tipo TypeScript de cada elemento é:
+
+type WhatsAppContact = {
+  jid: string;     // JID do contacto em @s.whatsapp.net
+  name: string;
+  phone: string;   // dígitos inferidos do JID do utilizador
+  notify?: string;  // opcional
+};
+
+type WhatsAppContactsBody = {
+  items: WhatsAppContact[];
+};
+# Listar agenda (JWT ou api key — mesmo padrão do pareamento)
+export API_BASE='https://saas-whatsapp-api.onrender.com'
+export TOKEN='sua_chave_ou_jwt'
+export INST='<instanceId-ou-codigo-inst-xxx>'
+
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$API_BASE/api/v1/instances/$INST/whatsapp/contacts"
+
+# Todos os contactos sincronizados (não só com nome de agenda):
+curl -sS -H "Authorization: Bearer $TOKEN" \
+  "$API_BASE/api/v1/instances/$INST/whatsapp/contacts?filter=all"
+
+# Resposta exemplo: { "items": [ { "jid": "...", "name": "...", "phone": "...", "notify": "..." } ] }
+article
+Mensagens por conversa (REST)
+Endpoint: GET /api/v1/instances/<instanceId>/whatsapp/conversations/<jid>/messages. Autenticação: Authorization: Bearer <JWT de sessão ou chave de API otp_…>.
+
+Path params: instanceId (ObjectId ou código da instância) e jid da conversa. Você pode enviar só o número (ex.: 5511999999999) que a API converte para JID automaticamente, ou informar o JID completo (ex.: 5511999999999@s.whatsapp.net).
+
+Query params: limit opcional (1..100, padrão 20) e beforeMessageId opcional (cursor para a próxima página).
+
+# Exemplo: primeira página
+GET https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages?limit=20
+Authorization: Bearer <token>
+
+# Exemplo de paginação (usar o nextCursor da resposta anterior)
+GET https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages?limit=20&beforeMessageId=<nextCursor>
+Authorization: Bearer <token>
+
+# Resposta 200 (exemplo)
+# {
+#   "items": [
+#     {
+#       "id": "3EB0C767F26B1C0A0F8C",
+#       "jid": "5511999999999@s.whatsapp.net",
+#       "fromMe": false,
+#       "timestamp": "2026-05-05T10:12:00.000Z",
+#       "text": "Olá, tudo bem?",
+#       "type": "conversation"
+#     }
+#   ],
+#   "nextCursor": "3EB0C767F26B1C0A0F8B"
+# }
+Erros comuns: 400 para parâmetros inválidos/JID ausente e 503 quando a sessão WhatsApp da instância não está conectada.
+
+Para mensagens com arquivo, a resposta pode incluir mediaUrl, mediaMimeType, mediaFileName e mediaSize.
+
+article
+Remover histórico persistido
+Remover por contato: DELETE /api/v1/instances/<instanceId>/whatsapp/conversations/<jid>/messages
+
+No parâmetro :jid, você pode usar apenas o telefone (ex.: 5511999999999) ou o JID completo (ex.: 5511999999999@s.whatsapp.net).
+
+Remover tudo da instância: DELETE /api/v1/instances/<instanceId>/messages
+
+Ambos exigem Authorization: Bearer <JWT de sessão> (API key não autorizada), e removem registros do banco + arquivos persistidos.
+
+# Limpar histórico de um contato específico
+DELETE https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/conversations/5511999999999/messages
+Authorization: Bearer <jwt>
+
+# Limpar todo histórico da instância
+DELETE https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/messages
+Authorization: Bearer <jwt>
+
+# Resposta 200 (exemplo)
+# {
+#   "deletedMessages": 12,
+#   "deletedMediaFiles": 3,
+#   "mediaDeleteErrors": 0
+# }
+article
+Envio de mensagem
+Endpoint de envio de mensagem por instância: POST /api/v1/auth/instances/:instanceId/send-code.
+
+phoneNumber: 10 a 15 dígitos. message: conteúdo da mensagem (1 a 200 caracteres).
+
+POST https://saas-whatsapp-api.onrender.com/api/v1/auth/instances/<instanceId>/send-code
+Authorization: Bearer <token>
+Content-Type: application/json
+
+{
+  "phoneNumber": "5511999999999",
+  "message": "Olá! Sua solicitação foi recebida e já está em atendimento."
+}
+200: mensagem enviada. 400: validação/número sem WhatsApp. 403: limite diário do plano grátis atingido (envios com sucesso, janela UTC; configurável com FREE_DAILY_SEND_LIMIT). 503: sessão não conectada.
+
+Para testar upgrade sem gateway, o endpoint POST /api/v1/auth/billing/mock-checkout (sessão JWT) promove o plano a pago; em produção use o fluxo de pagamento real.
+
+article
+Envio de arquivo
+Endpoint para envio de arquivo/documento por instância: POST /api/v1/auth/instances/:instanceId/send-media.
+
+Content-Type obrigatório: multipart/form-data. Campos esperados: phoneNumber (10 a 15 dígitos), file (arquivo obrigatório) e caption opcional (até 200 caracteres).
+
+Limite atual de tamanho: 16MB por arquivo. O envio usa a mesma autenticação Bearer (JWT ou chave otp_…) e a mesma verificação de sessão conectada.
+
+curl -X POST "https://saas-whatsapp-api.onrender.com/api/v1/auth/instances/<instanceId>/send-media" \
+  -H "Authorization: Bearer <token>" \
+  -F "phoneNumber=5511999999999" \
+  -F "caption=Segue o arquivo solicitado." \
+  -F "file=@/caminho/para/contrato.pdf"
+
+# Resposta 200:
+# { "ok": true, "message": "Arquivo enviado" }
+400: validação, arquivo ausente/vazio ou número sem WhatsApp. 403: limite diário do plano grátis atingido. 503: sessão não conectada ou indisponível.
+
+article
+Mídia recebida (webhook e socket)
+Imagem, vídeo, documento (PDF, DOC, etc.) e áudio/nota de voz (audioMessage) são descarregados pelo servidor e incluídos em media no mesmo payload enviado pelo webhook e pelo evento socket whatsapp.message.received.
+
+Para audioMessage: download via downloadMediaMessage (Baileys). Nota de voz (ptt) usa fileName voice-note.ogg (ou .mp3/.m4a conforme o mime); áudio comum usa audio.ogg, etc. Mime usual: audio/ogg; codecs=opus. O campo text costuma vir vazio.
+
+No webhook, fileBuffer serializa em JSON como { "type": "Buffer", "data": [ …bytes ] }. No Socket.IO, o cliente pode receber Uint8Array ou estrutura equivalente — reconstrua o buffer antes de gravar o ficheiro. Este payload não inclui mediaUrl; use o binário inline ou, depois de persistido, o endpoint REST de download.
+
+article
+Payload: mensagem recebida
+O corpo JSON de uma mensagem recebida (não confundir com o envio via send-code) tem sempre a mesma forma no webhook (POST) e no evento Socket whatsapp.message.received. O tipo TypeScript é:
+
+type WhatsAppIncomingMedia = {
+  fileBuffer: unknown;   // Buffer serializado ou Uint8Array no socket
+  mimeType: string;
+  fileName: string;
+  size: number;
+};
+
+type WhatsAppIncomingMessageEvent = {
+  messageId: string;   // id da mensagem (Baileys)
+  from: string;        // telefone do remetente (só dígitos); quando não resolvível, retorna string vazia
+  to: string | null;  // pushName do contacto, se existir; senão null
+  timestamp: string;   // data/hora em ISO 8601 (UTC)
+  text: string;        // texto extraído (mensagem de texto ou legenda)
+  userId: string;      // id do utilizador (conta) no painel
+  instanceId: string;  // id da instância WhatsApp desta ligação
+  media?: WhatsAppIncomingMedia;  // presente em imagem, vídeo e documento recebidos
+};
+Só entram na fila de receção mensagens de conversa (não enviadas por si; o fluxo de envio de OTP usa outro endpoint).
+
+Observação: quando o WhatsApp não expõe o telefone real do remetente, o campo from é enviado como string vazia.
+
+Exemplo — mensagem de texto (corpo exatamente enviado no webhook; idêntico no Socket)
+
+{
+  "messageId": "3EB0C767F26B1C0A0F8C",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:32:11.000Z",
+  "text": "Olá, preciso de ajuda.",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1"
+}
+
+Exemplo — documento recebido (webhook; socket usa a mesma forma, buffer pode variar)
+
+{
+  "messageId": "3EB0C767F26B1C0A0F8D",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2025-04-24T18:35:00.000Z",
+  "text": "Segue o contrato assinado.",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "media": {
+    "fileBuffer": { "type": "Buffer", "data": [37, 80, 68, 70, 45, 49, 46, 52] },
+    "mimeType": "application/pdf",
+    "fileName": "contrato.pdf",
+    "size": 245760
+  }
+}
+
+Exemplo — nota de voz / áudio recebido (webhook; socket usa a mesma forma)
+
+{
+  "messageId": "3EB0C767F26B1C0A0F8E",
+  "from": "5511999999999",
+  "to": "Nome do contacto",
+  "timestamp": "2026-07-02T18:31:00.000Z",
+  "text": "",
+  "userId": "65a1b2c3d4e5f6789abcdef0",
+  "instanceId": "65a1b2c3d4e5f6789abcdef1",
+  "media": {
+    "fileBuffer": { "type": "Buffer", "data": [79, 103, 103, 83] },
+    "mimeType": "audio/ogg; codecs=opus",
+    "fileName": "voice-note.ogg",
+    "size": 18432
+  }
+}
+article
+Webhook (mensagens recebidas)
+O servidor envia um POST para a sua URL quando chega uma mensagem. Exclusão mútua com o Socket: ao ativar o webhook ( enabled: true após o PUT), o Message Listener (Socket) é desativado nessa instância. A configuração exige JWT de sessão, não chave de API.
+
+# Consultar configuração
+GET https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/webhook
+Authorization: Bearer <jwt-sessao>
+
+# Resposta: { "url": string | null, "enabled": boolean, "hasSecret": boolean, "secretLast4": string | null }
+
+# Definir URL, ativar e (opcional) regenerar segredo
+PUT https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/webhook
+Authorization: Bearer <jwt-sessao>
+Content-Type: application/json
+
+{
+  "url": "https://seu-servidor.com/webhooks/wa",
+  "enabled": true,
+  "regenerateSecret": false
+}
+
+# Resposta 200: { "ok": true, "config": { ... }, "secret": "..." } — o campo "secret" só vem ao criar/regenerar
+
+# Enviar pedido de teste (mesmo corpo e assinatura que uma mensagem real)
+POST https://saas-whatsapp-api.onrender.com/api/v1/instances/<instanceId>/whatsapp/webhook/test
+Authorization: Bearer <jwt-sessao>
+Entrega: POST com Content-Type: application/json e corpo com a interface Payload: mensagem recebida. O cabeçalho X-Webhook-Signature: sha256=<hex> contém HMAC-SHA256 do corpo em UTF-8 exatamente como enviado, com o segredo da instância. Em produção a URL deve ser https://; http:// em produção só com WEBHOOK_INSECURE_HTTP=1 no servidor.
+
+article
+Socket.IO em tempo real
+O “listening” tem de estar ligado no painel (JWT). Exclusão mútua: ao ativar a escuta Socket, o webhook deixa de enviar (fica enabled: false na instância; URL e segredo mantêm-se). Autentique com chave de API e informe a instância no handshake:auth.apiKey e auth.instanceId.
+
+import { io } from 'socket.io-client';
+
+const socket = io('https://saas-whatsapp-api.onrender.com', {
+  path: '/socket.io',
+  transports: ['websocket'],
+  auth: { apiKey: 'sua_api_key', instanceId: '<instanceId>' },
+  timeout: 10000,
+});
+
+socket.emit(
+  'whatsapp.message.send',
+  { phoneNumber: '5511999999999', text: 'Mensagem enviada pelo canal em tempo real.' },
+  (ack) => console.log(ack)
+);
+
+socket.on('whatsapp.message.received', (payload) => {
+  // payload: WhatsAppIncomingMessageEvent — ver secção "Payload: mensagem recebida"
+  console.log(payload);
+});
+Eventos principais: whatsapp.message.send e whatsapp.message.received — a forma de whatsapp.message.received é a descrita em Payload: mensagem recebida.

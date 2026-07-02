@@ -8,6 +8,12 @@ export interface ChatMessageReceivedEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  type?: 'text' | 'image' | 'file' | 'audio';
+  attachment?: {
+    name: string;
+    mimeType: string;
+    size: number;
+  };
 }
 
 export interface ChatMessageSentEvent {

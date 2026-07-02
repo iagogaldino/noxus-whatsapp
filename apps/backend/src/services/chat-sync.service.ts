@@ -37,6 +37,8 @@ export async function syncConversationFromSaas(
           timestamp: message.timestamp,
           mediaUrl: message.mediaUrl,
           mediaMimeType: message.mediaMimeType,
+          mediaFileName: message.mediaFileName,
+          mediaSize: message.mediaSize,
           participantName,
         });
       }

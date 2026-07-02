@@ -7,9 +7,12 @@ import type {
   SaasConversationMessage,
   SaasConversationMessagesResponse,
   SaasConversationSummary,
+  SaasIncomingMedia,
   SaasIncomingMessageEvent,
 } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
+import { saveIncomingMedia } from './chat-media-gridfs.service.js';
+import { assertMediaSize, parseFileBuffer } from '../utils/parse-file-buffer.js';
 
 export function slugifyContactName(name: string): string {
   return name.toLowerCase().trim().replace(/\s+/g, '-');
@@ -69,7 +72,49 @@ export interface PersistMessageInput {
   timestamp: string | Date;
   mediaUrl?: string;
   mediaMimeType?: string;
+  mediaFileName?: string;
+  mediaSize?: number;
+  mediaGridFsId?: string;
   participantName?: string;
+}
+
+function isAudioMedia(mimeType: string, fileName: string): boolean {
+  return mimeType.startsWith('audio/') || /^voice-note\./i.test(fileName) || /^audio\./i.test(fileName);
+}
+
+function incomingMediaPreview(mimeType: string, fileName: string, caption?: string): string {
+  const trimmedCaption = caption?.trim();
+  if (trimmedCaption) return trimmedCaption;
+  if (mimeType.startsWith('image/')) return '📷 Foto';
+  if (isAudioMedia(mimeType, fileName)) {
+    return /^voice-note\./i.test(fileName) ? '🎤 Nota de voz' : '🎤 Áudio';
+  }
+  return `📎 ${fileName || 'arquivo'}`;
+}
+
+function resolveMediaMessageType(mimeType: string, fileName = ''): 'image' | 'audio' | 'file' {
+  if (mimeType.startsWith('image/')) return 'image';
+  if (isAudioMedia(mimeType, fileName)) return 'audio';
+  return 'file';
+}
+
+function parseIncomingMedia(raw: unknown): SaasIncomingMedia | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const media = raw as Record<string, unknown>;
+  const mimeType = String(media.mimeType ?? '');
+  const fileName = String(media.fileName ?? 'arquivo');
+  const size = Number(media.size ?? 0);
+  const fileBuffer = media.fileBuffer;
+
+  if (!fileBuffer) return undefined;
+
+  return {
+    fileBuffer,
+    mimeType: mimeType || 'application/octet-stream',
+    fileName,
+    size: Number.isFinite(size) ? size : 0,
+  };
 }
 
 function toSaasMessage(doc: {
@@ -81,6 +126,9 @@ function toSaasMessage(doc: {
   type: string;
   mediaUrl?: string | null;
   mediaMimeType?: string | null;
+  mediaFileName?: string | null;
+  mediaSize?: number | null;
+  mediaGridFsId?: string | null;
 }): SaasConversationMessage {
   return {
     id: doc.externalId,
@@ -91,6 +139,9 @@ function toSaasMessage(doc: {
     type: doc.type,
     mediaUrl: doc.mediaUrl ?? undefined,
     mediaMimeType: doc.mediaMimeType ?? undefined,
+    mediaFileName: doc.mediaFileName ?? undefined,
+    mediaSize: doc.mediaSize ?? undefined,
+    mediaGridFsId: doc.mediaGridFsId ?? undefined,
   };
 }
 
@@ -99,6 +150,28 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
   const jid = input.jid ?? toJid(chatId);
   const timestamp = new Date(input.timestamp);
   const type = input.type ?? 'conversation';
+
+  const existingMessage = await ChatMessage.findOne({
+    instanceId: input.instanceId,
+    externalId: input.externalId,
+  }).lean();
+
+  let mediaGridFsId = input.mediaGridFsId;
+  let mediaMimeType = input.mediaMimeType;
+  let mediaFileName = input.mediaFileName;
+  let mediaSize = input.mediaSize;
+  let mediaUrl = input.mediaUrl;
+
+  if (existingMessage?.mediaGridFsId && !input.mediaGridFsId) {
+    mediaGridFsId = existingMessage.mediaGridFsId ?? undefined;
+    mediaMimeType = existingMessage.mediaMimeType ?? input.mediaMimeType;
+    mediaFileName = existingMessage.mediaFileName ?? input.mediaFileName;
+    mediaSize = existingMessage.mediaSize ?? input.mediaSize;
+  }
+
+  if (!mediaUrl && existingMessage?.mediaUrl) {
+    mediaUrl = existingMessage.mediaUrl;
+  }
 
   await ChatMessage.findOneAndUpdate(
     { instanceId: input.instanceId, externalId: input.externalId },
@@ -111,8 +184,11 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
       text: input.text,
       type,
       timestamp,
-      mediaUrl: input.mediaUrl,
-      mediaMimeType: input.mediaMimeType,
+      mediaUrl,
+      mediaMimeType,
+      mediaFileName,
+      mediaSize,
+      mediaGridFsId,
     },
     { upsert: true, new: true },
   );
@@ -176,6 +252,9 @@ export async function saveMessages(
       timestamp: message.timestamp,
       mediaUrl: message.mediaUrl,
       mediaMimeType: message.mediaMimeType,
+      mediaFileName: message.mediaFileName,
+      mediaSize: message.mediaSize,
+      mediaGridFsId: message.mediaGridFsId,
       participantName: participantName ?? chatId,
     });
   }
@@ -555,8 +634,9 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
   const timestamp = String(source.timestamp ?? new Date().toISOString());
   const to = source.to == null ? null : String(source.to);
   const jid = source.jid == null ? undefined : String(source.jid);
+  const media = parseIncomingMedia(source.media);
 
-  if (!messageId && !text && !from && !jid) return null;
+  if (!messageId && !text && !from && !jid && !media) return null;
 
   return {
     messageId: messageId || `incoming-${Date.now()}`,
@@ -567,6 +647,7 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
     userId: String(source.userId ?? ''),
     instanceId,
     jid,
+    media,
   };
 }
 
@@ -577,6 +658,12 @@ export interface InboundChatMessageEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  type?: 'text' | 'image' | 'file' | 'audio';
+  attachment?: {
+    name: string;
+    mimeType: string;
+    size: number;
+  };
 }
 
 export async function persistIncomingMessage(raw: unknown): Promise<InboundChatMessageEvent | null> {
@@ -603,8 +690,65 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     return null;
   }
 
+  let text = payload.text;
+  let messageType: string = 'conversation';
+  let eventType: 'text' | 'image' | 'file' | 'audio' = 'text';
+  let mediaGridFsId: string | undefined;
+  let mediaMimeType: string | undefined;
+  let mediaFileName: string | undefined;
+  let mediaSize: number | undefined;
+  let attachment: InboundChatMessageEvent['attachment'];
+
   try {
     await mergeNameAliasConversation(instanceId, identity);
+
+    const existingMessage = await ChatMessage.findOne({
+      instanceId,
+      externalId: payload.messageId,
+    }).lean();
+
+    if (payload.media?.fileBuffer) {
+      if (existingMessage?.mediaGridFsId) {
+        mediaGridFsId = existingMessage.mediaGridFsId;
+        mediaMimeType = existingMessage.mediaMimeType ?? payload.media.mimeType;
+        mediaFileName = existingMessage.mediaFileName ?? payload.media.fileName;
+        mediaSize = existingMessage.mediaSize ?? payload.media.size;
+      } else {
+        const buffer = parseFileBuffer(payload.media.fileBuffer);
+        if (!buffer) {
+          console.warn('[Chat] fileBuffer inválido na mensagem recebida:', payload.messageId);
+        } else {
+          assertMediaSize(buffer);
+          const saved = await saveIncomingMedia({
+            instanceId,
+            messageId: payload.messageId,
+            buffer,
+            mimeType: payload.media.mimeType,
+            fileName: payload.media.fileName,
+          });
+          mediaGridFsId = saved.gridFsId;
+          mediaMimeType = payload.media.mimeType;
+          mediaFileName = payload.media.fileName;
+          mediaSize = payload.media.size || buffer.length;
+        }
+      }
+
+      if (mediaGridFsId && mediaMimeType) {
+        const resolvedType = resolveMediaMessageType(mediaMimeType, mediaFileName ?? '');
+        messageType = resolvedType;
+        eventType = resolvedType;
+        text = incomingMediaPreview(mediaMimeType, mediaFileName ?? 'arquivo', payload.text);
+        attachment = {
+          name: mediaFileName ?? 'arquivo',
+          mimeType: mediaMimeType,
+          size: mediaSize ?? 0,
+        };
+      }
+    } else if (!text.trim()) {
+      text = '🎤 Áudio recebido (indisponível)';
+      messageType = 'conversation';
+      eventType = 'text';
+    }
 
     await saveMessage({
       instanceId,
@@ -612,8 +756,13 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
       externalId: payload.messageId,
       jid: payload.jid,
       fromMe: false,
-      text: payload.text,
+      text,
+      type: messageType,
       timestamp: payload.timestamp,
+      mediaGridFsId,
+      mediaMimeType,
+      mediaFileName,
+      mediaSize,
       participantName: identity.participantName,
     });
   } catch (err) {
@@ -624,10 +773,12 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
   return {
     id: payload.messageId,
     chatId: identity.chatId,
-    text: payload.text,
+    text,
     senderId: identity.chatId,
     timestamp: payload.timestamp,
     fromName: identity.participantName,
+    type: eventType,
+    attachment,
   };
 }
 

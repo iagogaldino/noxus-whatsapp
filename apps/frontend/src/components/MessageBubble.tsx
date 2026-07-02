@@ -1,10 +1,12 @@
 import { IonIcon } from '@ionic/react';
-import { alertCircleOutline, checkmarkDoneOutline, documentOutline, timeOutline } from 'ionicons/icons';
+import { alertCircleOutline, checkmarkDoneOutline, timeOutline } from 'ionicons/icons';
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
-import { formatFileSize, getMessageType, isMediaPlaceholderText } from '../utils/message';
+import { getMessageType, isMediaPlaceholderText } from '../utils/message';
 import { FormattedMessageText } from '../utils/whatsappText';
 import ImageMessageContent from './ImageMessageContent';
+import FileMessageContent from './FileMessageContent';
+import AudioMessageContent from './AudioMessageContent';
 
 interface MessageBubbleProps {
   message: Message;
@@ -29,19 +31,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
         )}
 
         {type === 'file' && attachment && (
-          <a
-            href={attachment.url}
-            download={attachment.name}
-            className="wa-bubble__file-card"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <IonIcon icon={documentOutline} className="wa-bubble__file-icon" />
-            <div className="wa-bubble__file-info">
-              <span className="wa-bubble__file-name">{attachment.name}</span>
-              <span className="wa-bubble__file-size">{formatFileSize(attachment.size)}</span>
-            </div>
-          </a>
+          <FileMessageContent messageId={message.id} attachment={attachment} />
+        )}
+
+        {type === 'audio' && attachment && (
+          <AudioMessageContent messageId={message.id} attachment={attachment} />
         )}
 
         {type === 'text' && <FormattedMessageText text={message.text} className="wa-bubble__text" />}
