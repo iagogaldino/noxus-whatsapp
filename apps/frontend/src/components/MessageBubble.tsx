@@ -3,6 +3,7 @@ import { alertCircleOutline, checkmarkDoneOutline, documentOutline, timeOutline 
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
 import { formatFileSize, getMessageType } from '../utils/message';
+import { FormattedMessageText } from '../utils/whatsappText';
 
 interface MessageBubbleProps {
   message: Message;
@@ -58,9 +59,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
           </a>
         )}
 
-        {type === 'text' && <div className="wa-bubble__text">{message.text}</div>}
+        {type === 'text' && <FormattedMessageText text={message.text} className="wa-bubble__text" />}
 
-        {hasCaption && <div className="wa-bubble__caption">{message.text}</div>}
+        {hasCaption && <FormattedMessageText text={message.text} className="wa-bubble__caption" />}
 
         <div className="wa-bubble__meta">
           <span className="wa-bubble__time">{formatMessageTime(message.timestamp)}</span>

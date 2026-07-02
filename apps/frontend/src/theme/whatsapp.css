@@ -311,6 +311,35 @@ ion-app {
   white-space: pre-wrap;
 }
 
+.wa-bubble__text strong,
+.wa-bubble__caption strong {
+  font-weight: 600;
+}
+
+.wa-bubble__text em,
+.wa-bubble__caption em {
+  font-style: italic;
+}
+
+.wa-bubble__text del,
+.wa-bubble__caption del {
+  text-decoration: line-through;
+}
+
+.wa-bubble__mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.wa-bubble__link {
+  color: #027eb5;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 .wa-bubble__meta {
   display: flex;
   align-items: center;

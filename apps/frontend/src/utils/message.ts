@@ -1,4 +1,5 @@
 import { Message, MessageType } from '../types/chat';
+import { stripWhatsAppFormatting } from './whatsappText';
 
 export function resolveMessageType(mimeType: string): Exclude<MessageType, 'text'> {
   return mimeType.startsWith('image/') ? 'image' : 'file';
@@ -18,7 +19,7 @@ export function getAttachmentPreviewLabel(type: MessageType, fileName?: string):
 
 export function getMessagePreview(message: Message): string {
   const type = message.type ?? 'text';
-  if (type === 'text') return message.text;
+  if (type === 'text') return stripWhatsAppFormatting(message.text);
   return getAttachmentPreviewLabel(type, message.attachment?.name);
 }
 
