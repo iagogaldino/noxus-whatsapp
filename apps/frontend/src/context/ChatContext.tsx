@@ -19,11 +19,12 @@ import {
   mapApiMessageToChat,
   normalizePhone,
   sendMessageRest,
+  sendAttachmentRest,
 } from '../services/chatApi';
 import { chatSocket, ChatMessageReceivedEvent, ChatMessageSentEvent } from '../services/chatSocket';
 import { useAuth } from './AuthContext';
 
-const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+const MAX_ATTACHMENT_SIZE_BYTES = 16 * 1024 * 1024;
 
 const AVATAR_COLORS = ['#128C7E', '#25D366', '#075E54', '#34B7F1', '#7C4DFF', '#FF6B6B'];
 
@@ -58,7 +59,7 @@ interface ChatContextValue {
   getConversation: (chatId: string) => Conversation | undefined;
   loadChatHistory: (chatId: string) => Promise<void>;
   sendMessage: (chatId: string, text: string) => Promise<void>;
-  sendAttachment: (chatId: string, file: File, caption?: string) => boolean;
+  sendAttachment: (chatId: string, file: File, caption?: string) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
   refreshConversations: () => Promise<void>;
 }
@@ -437,16 +438,76 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
 
   const sendAttachment = useCallback(
-    (chatId: string, file: File, caption?: string): boolean => {
+    async (chatId: string, file: File, caption?: string): Promise<boolean> => {
       if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
-        window.alert('Arquivo muito grande. O limite é 10 MB.');
+        window.alert('Arquivo muito grande. O limite é 16 MB.');
         return false;
       }
 
-      window.alert('Envio de arquivos ainda não está disponível na integração.');
-      return false;
+      const type = resolveMessageType(file.type || 'application/octet-stream');
+      const previewText = caption?.trim() || getAttachmentPreviewLabel(type, file.name);
+      const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const objectUrl = URL.createObjectURL(file);
+
+      appendMessage({
+        id: clientId,
+        chatId,
+        text: previewText,
+        senderId: currentUser.id,
+        timestamp: new Date(),
+        status: 'pending',
+        type,
+        attachment: {
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          url: objectUrl,
+        },
+      });
+
+      try {
+        await sendAttachmentRest(chatId, file, caption);
+        URL.revokeObjectURL(objectUrl);
+
+        const response = await fetchConversationMessages(chatId, { limit: 50 });
+        const messages = response.items.map((item) => mapApiMessageToChat(item, currentUser.id));
+
+        setMessagesByChat((prev) => ({
+          ...prev,
+          [chatId]: messages,
+        }));
+
+        const lastMessage = messages[messages.length - 1];
+        if (lastMessage) {
+          setConversations((prev) => {
+            const existing = prev.find((c) => c.id === chatId);
+            const participant: User = existing?.participant ?? {
+              id: chatId,
+              name: chatId,
+              avatarColor: pickAvatarColor(chatId),
+            };
+
+            const updated: Conversation = {
+              id: chatId,
+              participant,
+              lastMessage,
+              unreadCount: existing?.unreadCount ?? 0,
+            };
+
+            const others = prev.filter((c) => c.id !== chatId);
+            return [updated, ...others].sort(
+              (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+            );
+          });
+        }
+
+        return true;
+      } catch {
+        updateMessage(chatId, clientId, { status: 'failed' });
+        return false;
+      }
     },
-    [],
+    [appendMessage, currentUser.id, updateMessage],
   );
 
   const markAsRead = useCallback((chatId: string) => {

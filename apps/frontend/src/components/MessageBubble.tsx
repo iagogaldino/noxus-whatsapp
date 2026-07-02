@@ -2,8 +2,9 @@ import { IonIcon } from '@ionic/react';
 import { alertCircleOutline, checkmarkDoneOutline, documentOutline, timeOutline } from 'ionicons/icons';
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
-import { formatFileSize, getMessageType } from '../utils/message';
+import { formatFileSize, getMessageType, isMediaPlaceholderText } from '../utils/message';
 import { FormattedMessageText } from '../utils/whatsappText';
+import ImageMessageContent from './ImageMessageContent';
 
 interface MessageBubbleProps {
   message: Message;
@@ -14,16 +15,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
   const type = getMessageType(message);
   const attachment = message.attachment;
   const hasCaption =
-    type !== 'text' &&
-    attachment &&
-    message.text !== `📷 Foto` &&
-    !message.text.startsWith('📎 ');
-
-  const handleImageClick = () => {
-    if (attachment?.url) {
-      window.open(attachment.url, '_blank', 'noopener,noreferrer');
-    }
-  };
+    type !== 'text' && attachment && !isMediaPlaceholderText(message.text);
 
   return (
     <div className={`wa-message-row ${isSent ? 'wa-message-row--sent' : 'wa-message-row--received'}`}>
@@ -33,14 +25,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
         }`}
       >
         {type === 'image' && attachment && (
-          <button
-            type="button"
-            className="wa-bubble__image-btn"
-            onClick={handleImageClick}
-            aria-label={`Abrir imagem ${attachment.name}`}
-          >
-            <img src={attachment.url} alt={attachment.name} className="wa-bubble__image" />
-          </button>
+          <ImageMessageContent messageId={message.id} attachment={attachment} />
         )}
 
         {type === 'file' && attachment && (

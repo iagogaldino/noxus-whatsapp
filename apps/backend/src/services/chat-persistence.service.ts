@@ -169,6 +169,51 @@ export async function saveMessages(
   }
 }
 
+export async function removeSupersededLocalMessages(
+  instanceId: string,
+  chatId: string,
+  saasMessages: SaasConversationMessage[],
+): Promise<void> {
+  const normalizedChatId = normalizeChatId(chatId);
+  const localPlaceholders = await ChatMessage.find({
+    instanceId,
+    chatId: normalizedChatId,
+    fromMe: true,
+    externalId: { $regex: /^local-/ },
+    $or: [{ mediaUrl: { $exists: false } }, { mediaUrl: null }, { mediaUrl: '' }],
+  }).lean();
+
+  if (localPlaceholders.length === 0) return;
+
+  const saasFromMeMedia = saasMessages.filter((message) => message.fromMe && message.mediaUrl);
+
+  for (const local of localPlaceholders) {
+    const hasMatch = saasFromMeMedia.some((saas) => {
+      const timeDiff = Math.abs(new Date(saas.timestamp).getTime() - local.timestamp.getTime());
+      return timeDiff < 120_000;
+    });
+
+    if (hasMatch) {
+      await ChatMessage.deleteOne({ _id: local._id });
+    }
+  }
+}
+
+export async function getConversation(
+  instanceId: string,
+  chatId: string,
+): Promise<{ participantName: string } | null> {
+  const doc = await ChatConversation.findOne({
+    instanceId,
+    chatId: normalizeChatId(chatId),
+  })
+    .select('participantName')
+    .lean();
+
+  if (!doc) return null;
+  return { participantName: doc.participantName };
+}
+
 export async function listConversations(
   instanceId: string,
   limit = 200,

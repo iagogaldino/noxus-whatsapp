@@ -392,6 +392,21 @@ ion-app {
   border-radius: 6px;
 }
 
+.wa-bubble__image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 180px;
+  height: 180px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 6px;
+}
+
+.wa-bubble__image-placeholder-icon {
+  font-size: 2rem;
+  opacity: 0.45;
+}
+
 .wa-bubble__file-card {
   display: flex;
   align-items: center;
@@ -575,4 +590,44 @@ ion-app {
 .wa-chat-header__status {
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+.wa-image-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px 16px;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.wa-image-preview__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
+
+.wa-image-preview__close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.wa-image-preview__img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  user-select: none;
 }

@@ -26,3 +26,33 @@ export function getMessagePreview(message: Message): string {
 export function getMessageType(message: Message): MessageType {
   return message.type ?? 'text';
 }
+
+export function isMediaPlaceholderText(text: string): boolean {
+  return text === '📷 Foto' || text.startsWith('📎 ') || /^\[arquivo\]/i.test(text.trim());
+}
+
+export function normalizeMediaMessageText(
+  text: string,
+  type: MessageType,
+  fileName?: string,
+): string {
+  const arquivoMatch = text.trim().match(/^\[arquivo\]\s*(.+)$/i);
+  if (!arquivoMatch) return text;
+
+  const resolvedName = fileName ?? arquivoMatch[1]?.trim();
+  if (type === 'image') return '📷 Foto';
+  return resolvedName ? `📎 ${resolvedName}` : '📎 Arquivo';
+}
+
+export function extractMediaFileName(
+  text: string,
+  mediaFileName?: string,
+): string | undefined {
+  if (mediaFileName?.trim()) return mediaFileName.trim();
+
+  const arquivoMatch = text.trim().match(/^\[arquivo\]\s*(.+)$/i);
+  if (arquivoMatch?.[1]?.trim()) return arquivoMatch[1].trim();
+
+  if (text.startsWith('📎 ')) return text.slice(2).trim();
+  return undefined;
+}

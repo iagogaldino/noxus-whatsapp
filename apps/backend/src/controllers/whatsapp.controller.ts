@@ -1,6 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import type { SaasConversationMessage } from '../types/saas-whatsapp.js';
+import { AppError } from '../middleware/error.middleware.js';
 import * as chatPersistence from '../services/chat-persistence.service.js';
+import { syncConversationFromSaas } from '../services/chat-sync.service.js';
+import { getMessageMedia } from '../services/chat-media.service.js';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
@@ -135,28 +139,14 @@ export async function getConversationMessages(
     const limit = req.query.limit ? Number(req.query.limit) : 20;
     const beforeMessageId = req.query.beforeMessageId as string | undefined;
 
-    let messages = await chatPersistence.listMessages(instanceId, jid, {
+    if (!beforeMessageId) {
+      await syncConversationFromSaas(instanceId, jid, Math.max(limit, 50));
+    }
+
+    const messages = await chatPersistence.listMessages(instanceId, jid, {
       limit,
       beforeMessageId,
     });
-
-    if (messages.items.length === 0 && !beforeMessageId) {
-      try {
-        const saasMessages = await saasWhatsApp.getConversationMessages(instanceId, jid, {
-          limit,
-        });
-        if (saasMessages.items.length > 0) {
-          await chatPersistence.saveMessages(
-            instanceId,
-            saasMessages.items,
-            saasWhatsApp.normalizePhone(jid),
-          );
-          messages = await chatPersistence.listMessages(instanceId, jid, { limit });
-        }
-      } catch {
-        // Histórico indisponível no SaaS — retorna lista vazia do banco
-      }
-    }
 
     res.json(messages);
   } catch (err) {
@@ -191,6 +181,106 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     });
 
     res.json({ ok: true, messageId });
+  } catch (err) {
+    next(err);
+  }
+}
+
+function mediaMessagePreview(mimetype: string, filename: string, caption?: string): string {
+  const trimmedCaption = caption?.trim();
+  if (trimmedCaption) return trimmedCaption;
+  if (mimetype.startsWith('image/')) return '📷 Foto';
+  return `📎 ${filename}`;
+}
+
+export async function sendMedia(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const file = req.file;
+    if (!file?.buffer?.length) {
+      throw new AppError(400, 'Arquivo ausente ou vazio.');
+    }
+
+    const chatId = typeof req.body.chatId === 'string' ? req.body.chatId.trim() : '';
+    const phoneNumberRaw =
+      typeof req.body.phoneNumber === 'string' ? req.body.phoneNumber.trim() : '';
+    const caption = typeof req.body.caption === 'string' ? req.body.caption.trim() : undefined;
+
+    if (caption && caption.length > 200) {
+      throw new AppError(400, 'Legenda deve ter no máximo 200 caracteres.');
+    }
+
+    if (!chatId && saasWhatsApp.normalizePhone(phoneNumberRaw).length < 10) {
+      throw new AppError(400, 'Informe chatId ou phoneNumber válido.');
+    }
+
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const phoneNumber =
+      saasWhatsApp.normalizePhone(phoneNumberRaw).length >= 10
+        ? saasWhatsApp.normalizePhone(phoneNumberRaw)
+        : await chatPersistence.resolveOutboundPhone(instanceId, chatId);
+
+    const resolvedChatId = chatId
+      ? chatPersistence.normalizeChatId(chatId)
+      : phoneNumber;
+
+    await saasWhatsApp.sendMedia(
+      instanceId,
+      phoneNumber,
+      {
+        buffer: file.buffer,
+        originalname: file.originalname,
+        mimetype: file.mimetype || 'application/octet-stream',
+      },
+      caption,
+    );
+
+    const text = mediaMessagePreview(file.mimetype, file.originalname, caption);
+    const type = file.mimetype.startsWith('image/') ? 'image' : 'file';
+
+    let latestMedia: SaasConversationMessage | undefined;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const synced = await syncConversationFromSaas(instanceId, resolvedChatId, 10);
+      latestMedia = synced.find((message) => message.fromMe && message.mediaUrl);
+      if (latestMedia) break;
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+
+    if (latestMedia) {
+      res.json({ ok: true, messageId: latestMedia.id, message: latestMedia });
+      return;
+    }
+
+    const messageId = `local-${Date.now()}`;
+
+    await chatPersistence.saveMessage({
+      instanceId,
+      chatId: resolvedChatId,
+      externalId: messageId,
+      fromMe: true,
+      text,
+      type,
+      timestamp: new Date(),
+      mediaMimeType: file.mimetype || 'application/octet-stream',
+    });
+
+    res.json({ ok: true, messageId });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getMessageMediaHandler(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const media = await getMessageMedia(instanceId, req.params.messageId);
+
+    res.setHeader('Content-Type', media.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(media.buffer);
   } catch (err) {
     next(err);
   }

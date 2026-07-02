@@ -4,7 +4,7 @@ import { useRef, useState, KeyboardEvent, ChangeEvent } from 'react';
 
 interface MessageInputProps {
   onSend: (text: string) => void;
-  onSendAttachment: (file: File) => void;
+  onSendAttachment: (file: File, caption?: string) => void;
 }
 
 const FILE_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip';
@@ -33,7 +33,11 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendAttachment })
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      onSendAttachment(file);
+      const caption = text.trim() || undefined;
+      onSendAttachment(file, caption);
+      if (caption) {
+        setText('');
+      }
     }
     e.target.value = '';
   };

@@ -163,10 +163,102 @@ export async function sendMessage(
   });
 }
 
+export interface SaasMediaFile {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+}
+
+export async function sendMedia(
+  instanceId: string,
+  phoneNumber: string,
+  file: SaasMediaFile,
+  caption?: string,
+): Promise<void> {
+  ensureApiKey();
+
+  const formData = new FormData();
+  formData.append('phoneNumber', phoneNumber);
+  formData.append(
+    'file',
+    new Blob([new Uint8Array(file.buffer)], { type: file.mimetype }),
+    file.originalname,
+  );
+  if (caption) {
+    formData.append('caption', caption);
+  }
+
+  const url = `${env.SAAS_WHATSAPP_API_URL}/api/v1/auth/instances/${encodeURIComponent(instanceId)}/send-media`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.SAAS_WHATSAPP_API_KEY}`,
+      },
+      body: formData,
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new AppError(504, 'Tempo esgotado ao enviar arquivo.');
+    }
+    throw new AppError(502, 'Não foi possível contactar o serviço WhatsApp.');
+  }
+
+  const body = (await response.json().catch(() => ({}))) as { error?: string };
+
+  if (!response.ok) {
+    const message = body.error ?? `Erro do serviço WhatsApp (${response.status}).`;
+    throw new AppError(response.status >= 500 ? 502 : response.status, message);
+  }
+}
+
 export function normalizePhone(jidOrPhone: string | number): string {
   const raw = String(jidOrPhone ?? '');
   const base = raw.split('@')[0] ?? raw;
   return base.replace(/\D/g, '');
+}
+
+export function resolveSaasMediaUrl(mediaUrl: string): string {
+  if (mediaUrl.startsWith('http://') || mediaUrl.startsWith('https://')) {
+    return mediaUrl;
+  }
+  return `${env.SAAS_WHATSAPP_API_URL}${mediaUrl.startsWith('/') ? '' : '/'}${mediaUrl}`;
+}
+
+export async function fetchSaasMedia(mediaUrl: string): Promise<{
+  buffer: Buffer;
+  mimeType: string;
+}> {
+  ensureApiKey();
+
+  const url = resolveSaasMediaUrl(mediaUrl);
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${env.SAAS_WHATSAPP_API_KEY}`,
+      },
+      signal: AbortSignal.timeout(30000),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new AppError(504, 'Tempo esgotado ao carregar mídia.');
+    }
+    throw new AppError(502, 'Não foi possível carregar a mídia.');
+  }
+
+  if (!response.ok) {
+    throw new AppError(response.status === 404 ? 404 : 502, 'Mídia indisponível.');
+  }
+
+  const buffer = Buffer.from(await response.arrayBuffer());
+  const mimeType = response.headers.get('content-type') ?? 'application/octet-stream';
+
+  return { buffer, mimeType };
 }
 
 export function mapSaasMessageToChat(

@@ -55,7 +55,7 @@ const ChatDetail: React.FC = () => {
       <IonFooter className="wa-footer">
         <MessageInput
           onSend={(text) => void sendMessage(id, text)}
-          onSendAttachment={(file) => sendAttachment(id, file)}
+          onSendAttachment={(file, caption) => void sendAttachment(id, file, caption)}
         />
       </IonFooter>
     </IonPage>
