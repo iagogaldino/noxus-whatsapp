@@ -1,35 +1,78 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { initialConversations, initialMessages } from '../data/mockData';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { Conversation, Message, User } from '../types/chat';
 import {
   getAttachmentPreviewLabel,
   getMessagePreview,
   resolveMessageType,
 } from '../utils/message';
+import {
+  fetchContacts,
+  fetchConversationMessages,
+  mapApiMessageToChat,
+  normalizePhone,
+  sendMessageRest,
+} from '../services/chatApi';
+import { chatSocket, ChatMessageReceivedEvent, ChatMessageSentEvent } from '../services/chatSocket';
 import { useAuth } from './AuthContext';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
+
+const AVATAR_COLORS = ['#128C7E', '#25D366', '#075E54', '#34B7F1', '#7C4DFF', '#FF6B6B'];
+
+function pickAvatarColor(id: string): string {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = id.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function buildPlaceholderMessage(chatId: string, text: string): Message {
+  return {
+    id: `${chatId}-placeholder`,
+    chatId,
+    text,
+    senderId: chatId,
+    timestamp: new Date(0),
+    type: 'text',
+  };
+}
 
 interface ChatContextValue {
   currentUser: User;
   conversations: Conversation[];
   searchQuery: string;
+  isLoading: boolean;
+  error: string | null;
   setSearchQuery: (query: string) => void;
   filteredConversations: Conversation[];
   getMessages: (chatId: string) => Message[];
   getConversation: (chatId: string) => Conversation | undefined;
-  sendMessage: (chatId: string, text: string) => void;
+  loadChatHistory: (chatId: string) => Promise<void>;
+  sendMessage: (chatId: string, text: string) => Promise<void>;
   sendAttachment: (chatId: string, file: File, caption?: string) => boolean;
   markAsRead: (chatId: string) => void;
+  refreshConversations: () => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 
 export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { session } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
-  const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>(initialMessages);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [messagesByChat, setMessagesByChat] = useState<Record<string, Message[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const loadedChatsRef = useRef<Set<string>>(new Set());
 
   const currentUser = useMemo<User>(
     () => ({
@@ -40,6 +83,158 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }),
     [session],
   );
+
+  const appendMessage = useCallback((message: Message) => {
+    setMessagesByChat((prev) => {
+      const existing = prev[message.chatId] ?? [];
+      if (existing.some((m) => m.id === message.id)) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [message.chatId]: [...existing, message],
+      };
+    });
+
+    setConversations((prev) => {
+      const chatId = message.chatId;
+      const existingConv = prev.find((c) => c.id === chatId);
+      const participant: User = existingConv?.participant ?? {
+        id: chatId,
+        name: chatId,
+        avatarColor: pickAvatarColor(chatId),
+      };
+
+      const updated: Conversation = {
+        id: chatId,
+        participant,
+        lastMessage: message,
+        unreadCount: existingConv?.unreadCount ?? 0,
+      };
+
+      const others = prev.filter((c) => c.id !== chatId);
+      return [updated, ...others].sort(
+        (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+      );
+    });
+  }, []);
+
+  const handleIncoming = useCallback(
+    (event: ChatMessageReceivedEvent) => {
+      const message: Message = {
+        id: event.id,
+        chatId: event.chatId,
+        text: event.text,
+        senderId: event.senderId,
+        timestamp: new Date(event.timestamp),
+        status: 'delivered',
+        type: 'text',
+      };
+
+      setConversations((prev) => {
+        const existing = prev.find((c) => c.id === event.chatId);
+        const participant: User = existing?.participant ?? {
+          id: event.chatId,
+          name: event.fromName ?? event.chatId,
+          avatarColor: pickAvatarColor(event.chatId),
+        };
+
+        const updated: Conversation = {
+          id: event.chatId,
+          participant,
+          lastMessage: message,
+          unreadCount: (existing?.unreadCount ?? 0) + 1,
+        };
+
+        const others = prev.filter((c) => c.id !== event.chatId);
+        return [updated, ...others].sort(
+          (a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+        );
+      });
+
+      appendMessage(message);
+    },
+    [appendMessage],
+  );
+
+  const handleSent = useCallback(
+    (event: ChatMessageSentEvent) => {
+      appendMessage({
+        id: event.id,
+        chatId: event.chatId,
+        text: event.text,
+        senderId: event.senderId,
+        timestamp: new Date(event.timestamp),
+        status: 'sent',
+        type: 'text',
+      });
+    },
+    [appendMessage],
+  );
+
+  const refreshConversations = useCallback(async () => {
+    if (!session) return;
+
+    try {
+      const contacts = await fetchContacts();
+      const convs: Conversation[] = contacts.map((contact) => {
+        const chatId = normalizePhone(contact.phone ?? contact.jid ?? contact.id);
+        const name = contact.notify ?? contact.phone ?? chatId;
+        return {
+          id: chatId,
+          participant: {
+            id: chatId,
+            name,
+            avatarColor: pickAvatarColor(chatId),
+          },
+          lastMessage: buildPlaceholderMessage(chatId, 'Sem mensagens'),
+          unreadCount: 0,
+        };
+      });
+
+      setConversations(
+        convs.sort((a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime()),
+      );
+      setError(null);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao carregar conversas.';
+      setError(message);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) {
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function bootstrap() {
+      setIsLoading(true);
+      chatSocket.connect();
+
+      try {
+        await refreshConversations();
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void bootstrap();
+
+    const unsubReceived = chatSocket.onMessageReceived(handleIncoming);
+    const unsubSent = chatSocket.onMessageSent(handleSent);
+
+    return () => {
+      cancelled = true;
+      unsubReceived();
+      unsubSent();
+      chatSocket.disconnect();
+    };
+  }, [session, refreshConversations, handleIncoming, handleSent]);
 
   const filteredConversations = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -62,37 +257,87 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [conversations],
   );
 
-  const appendMessage = useCallback((chatId: string, message: Message) => {
-    setMessagesByChat((prev) => ({
-      ...prev,
-      [chatId]: [...(prev[chatId] ?? []), message],
-    }));
+  const loadChatHistory = useCallback(
+    async (chatId: string) => {
+      if (!session) return;
 
-    setConversations((prev) =>
-      prev
-        .map((conv) =>
-          conv.id === chatId ? { ...conv, lastMessage: message, unreadCount: 0 } : conv,
-        )
-        .sort((a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime()),
-    );
-  }, []);
+      setConversations((prev) => {
+        if (prev.some((c) => c.id === chatId)) return prev;
+        return [
+          {
+            id: chatId,
+            participant: {
+              id: chatId,
+              name: chatId,
+              avatarColor: pickAvatarColor(chatId),
+            },
+            lastMessage: buildPlaceholderMessage(chatId, 'Carregando…'),
+            unreadCount: 0,
+          },
+          ...prev,
+        ];
+      });
+
+      if (loadedChatsRef.current.has(chatId)) return;
+
+      try {
+        const response = await fetchConversationMessages(chatId, { limit: 50 });
+        const messages = response.items.map((item) =>
+          mapApiMessageToChat(item, currentUser.id),
+        );
+
+        if (messages.length > 0) {
+          setMessagesByChat((prev) => ({
+            ...prev,
+            [chatId]: messages,
+          }));
+
+          const lastMessage = messages[messages.length - 1];
+          setConversations((prev) =>
+            prev
+              .map((conv) =>
+                conv.id === chatId ? { ...conv, lastMessage } : conv,
+              )
+              .sort(
+                (a, b) =>
+                  b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+              ),
+          );
+        }
+
+        loadedChatsRef.current.add(chatId);
+      } catch {
+        // Histórico indisponível — conversa ainda pode receber mensagens em tempo real
+      }
+    },
+    [session, currentUser.id],
+  );
 
   const sendMessage = useCallback(
-    (chatId: string, text: string) => {
+    async (chatId: string, text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
-      const newMessage: Message = {
-        id: `${chatId}-msg-${Date.now()}`,
-        chatId,
-        text: trimmed,
-        senderId: currentUser.id,
-        timestamp: new Date(),
-        status: 'sent',
-        type: 'text',
-      };
+      const phoneNumber = normalizePhone(chatId);
+      let result = await chatSocket.sendMessage(chatId, trimmed);
 
-      appendMessage(chatId, newMessage);
+      if (!result.ok) {
+        try {
+          await sendMessageRest(phoneNumber, trimmed);
+          appendMessage({
+            id: `${chatId}-local-${Date.now()}`,
+            chatId,
+            text: trimmed,
+            senderId: currentUser.id,
+            timestamp: new Date(),
+            status: 'sent',
+            type: 'text',
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Falha ao enviar mensagem.';
+          setError(message);
+        }
+      }
     },
     [appendMessage, currentUser.id],
   );
@@ -104,30 +349,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      const type = resolveMessageType(file.type || 'application/octet-stream');
-      const trimmedCaption = caption?.trim();
-      const preview = getAttachmentPreviewLabel(type, file.name);
-
-      const newMessage: Message = {
-        id: `${chatId}-msg-${Date.now()}`,
-        chatId,
-        text: trimmedCaption || preview,
-        senderId: currentUser.id,
-        timestamp: new Date(),
-        status: 'sent',
-        type,
-        attachment: {
-          name: file.name,
-          mimeType: file.type || 'application/octet-stream',
-          size: file.size,
-          url: URL.createObjectURL(file),
-        },
-      };
-
-      appendMessage(chatId, newMessage);
-      return true;
+      window.alert('Envio de arquivos ainda não está disponível na integração.');
+      return false;
     },
-    [appendMessage, currentUser.id],
+    [],
   );
 
   const markAsRead = useCallback((chatId: string) => {
@@ -141,24 +366,32 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentUser,
       conversations,
       searchQuery,
+      isLoading,
+      error,
       setSearchQuery,
       filteredConversations,
       getMessages,
       getConversation,
+      loadChatHistory,
       sendMessage,
       sendAttachment,
       markAsRead,
+      refreshConversations,
     }),
     [
       currentUser,
       conversations,
       searchQuery,
+      isLoading,
+      error,
       filteredConversations,
       getMessages,
       getConversation,
+      loadChatHistory,
       sendMessage,
       sendAttachment,
       markAsRead,
+      refreshConversations,
     ],
   );
 

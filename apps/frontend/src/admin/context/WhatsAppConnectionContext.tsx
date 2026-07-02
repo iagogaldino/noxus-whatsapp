@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { whatsappApi } from '../services/whatsappApi.mock';
+import { whatsappApi } from '../services/whatsappApi.http';
 import type { WhatsAppConnectionStatus } from '../types/whatsapp';
 import {
   clearWhatsAppConnection,

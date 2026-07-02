@@ -7,6 +7,9 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(8),
   JWT_EXPIRES_IN: z.string().default('7d'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
+  SAAS_WHATSAPP_API_URL: z.string().url().default('https://saas-whatsapp-api.onrender.com'),
+  SAAS_WHATSAPP_API_KEY: z.string().default(''),
+  SAAS_WHATSAPP_INSTANCE_ID: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);

@@ -8,7 +8,8 @@ import {
   IonToolbar,
 } from '@ionic/react';
 import { checkmarkCircleOutline, closeOutline } from 'ionicons/icons';
-import { useEffect } from 'react';
+import QRCode from 'qrcode';
+import { useEffect, useState } from 'react';
 import { useWhatsAppConnection } from '../context/WhatsAppConnectionContext';
 
 export const WhatsAppPairingModal: React.FC = () => {
@@ -21,6 +22,27 @@ export const WhatsAppPairingModal: React.FC = () => {
     startPairing,
     stopPairing,
   } = useWhatsAppConnection();
+
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!qrPayload) {
+      setQrDataUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void QRCode.toDataURL(qrPayload, { margin: 2, width: 256 }).then((url) => {
+      if (!cancelled) {
+        setQrDataUrl(url);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [qrPayload]);
 
   useEffect(() => {
     if (status !== 'connected' || !isModalOpen) {
@@ -75,10 +97,18 @@ export const WhatsAppPairingModal: React.FC = () => {
 
             {showQr && (
               <div className="admin-pairing-modal__state">
-                <div
-                  className="admin-pairing-modal__qr-placeholder"
-                  aria-label="Código QR para pareamento WhatsApp"
-                />
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt="Código QR para pareamento WhatsApp"
+                    className="admin-pairing-modal__qr-image"
+                  />
+                ) : (
+                  <IonSpinner name="crescent" className="admin-pairing-modal__spinner" />
+                )}
+                <p className="admin-pairing-modal__message">
+                  Abra o WhatsApp no celular e escaneie o código
+                </p>
               </div>
             )}
 

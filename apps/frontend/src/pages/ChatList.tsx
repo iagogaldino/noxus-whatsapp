@@ -36,7 +36,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const history = useHistory();
   const location = useLocation();
   const { replace } = useAppNavigate();
-  const { filteredConversations, markAsRead } = useChat();
+  const { filteredConversations, markAsRead, isLoading, error } = useChat();
   const { isAdmin } = useAuth();
   const [popoverEvent, setPopoverEvent] = useState<MouseEvent | undefined>();
   const [pendingPath, setPendingPath] = useState<string | null>(null);
@@ -106,16 +106,30 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
       </IonPopover>
 
       <IonContent className={sidebar ? 'wa-sidebar-content' : undefined}>
-        <IonList lines="none">
-          {filteredConversations.map((conversation) => (
-            <ChatListItem
-              key={conversation.id}
-              conversation={conversation}
-              isActive={activeChatId === conversation.id}
-              onClick={() => openChat(conversation.id)}
-            />
-          ))}
-        </IonList>
+        {isLoading ? (
+          <div className="wa-empty-state">
+            <p>Carregando conversas…</p>
+          </div>
+        ) : error ? (
+          <div className="wa-empty-state">
+            <p>{error}</p>
+          </div>
+        ) : filteredConversations.length === 0 ? (
+          <div className="wa-empty-state">
+            <p>Nenhuma conversa encontrada.</p>
+          </div>
+        ) : (
+          <IonList lines="none">
+            {filteredConversations.map((conversation) => (
+              <ChatListItem
+                key={conversation.id}
+                conversation={conversation}
+                isActive={activeChatId === conversation.id}
+                onClick={() => openChat(conversation.id)}
+              />
+            ))}
+          </IonList>
+        )}
       </IonContent>
     </>
   );

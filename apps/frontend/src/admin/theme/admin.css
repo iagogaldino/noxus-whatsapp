@@ -926,6 +926,16 @@
   box-sizing: border-box;
 }
 
+.admin-pairing-modal__qr-image {
+  width: min(256px, 100%);
+  height: auto;
+  border-radius: 12px;
+  border: 1px solid var(--admin-border);
+  background: #ffffff;
+  padding: 8px;
+  box-sizing: border-box;
+}
+
 .admin-pairing-modal__state--success .admin-pairing-modal__success-icon {
   font-size: 4rem;
   color: var(--admin-success);

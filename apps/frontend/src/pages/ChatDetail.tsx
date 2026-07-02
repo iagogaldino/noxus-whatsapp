@@ -9,15 +9,18 @@ import { useChat } from '../context/ChatContext';
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, currentUser } =
+  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, currentUser } =
     useChat();
 
   const conversation = getConversation(id);
   const messages = getMessages(id);
 
   useEffect(() => {
-    if (id) markAsRead(id);
-  }, [id, markAsRead]);
+    if (id) {
+      void loadChatHistory(id);
+      markAsRead(id);
+    }
+  }, [id, markAsRead, loadChatHistory]);
 
   useEffect(() => {
     contentRef.current?.scrollToBottom(300);
@@ -51,7 +54,7 @@ const ChatDetail: React.FC = () => {
       </IonContent>
       <IonFooter className="wa-footer">
         <MessageInput
-          onSend={(text) => sendMessage(id, text)}
+          onSend={(text) => void sendMessage(id, text)}
           onSendAttachment={(file) => sendAttachment(id, file)}
         />
       </IonFooter>
