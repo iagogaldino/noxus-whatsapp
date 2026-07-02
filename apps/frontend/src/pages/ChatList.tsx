@@ -13,6 +13,7 @@ import {
   IonToolbar,
 } from '@ionic/react';
 import {
+  chatboxOutline,
   ellipsisVertical,
   gridOutline,
   personOutline,
@@ -20,6 +21,7 @@ import {
 import { useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import ChatListItem from '../components/ChatListItem';
+import NewChatModal from '../components/NewChatModal';
 import SearchBar from '../components/SearchBar';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
@@ -36,10 +38,11 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const history = useHistory();
   const location = useLocation();
   const { replace } = useAppNavigate();
-  const { filteredConversations, markAsRead, isLoading, error } = useChat();
+  const { filteredConversations, markAsRead, isLoading, error, startConversation } = useChat();
   const { isAdmin } = useAuth();
   const [popoverEvent, setPopoverEvent] = useState<MouseEvent | undefined>();
   const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
 
   const activeChatId = location.pathname.startsWith('/chat/')
     ? location.pathname.split('/chat/')[1]
@@ -48,6 +51,12 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const openChat = (chatId: string) => {
     markAsRead(chatId);
     history.push(`/chat/${chatId}`);
+  };
+
+  const handleStartConversation = (chatId: string, participantName: string) => {
+    startConversation(chatId, participantName);
+    setIsNewChatOpen(false);
+    openChat(chatId);
   };
 
   const openMenu = (e: React.MouseEvent) => {
@@ -65,6 +74,14 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
         <IonToolbar className="wa-toolbar">
           <IonTitle>WhatsApp</IonTitle>
           <IonButtons slot="end">
+            <IonButton
+              fill="clear"
+              color="light"
+              aria-label="Nova conversa"
+              onClick={() => setIsNewChatOpen(true)}
+            >
+              <IonIcon icon={chatboxOutline} slot="icon-only" />
+            </IonButton>
             <IonButton
               fill="clear"
               color="light"
@@ -104,6 +121,12 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
           )}
         </IonList>
       </IonPopover>
+
+      <NewChatModal
+        isOpen={isNewChatOpen}
+        onClose={() => setIsNewChatOpen(false)}
+        onSelectContact={handleStartConversation}
+      />
 
       <IonContent className={sidebar ? 'wa-sidebar-content' : undefined}>
         {isLoading ? (

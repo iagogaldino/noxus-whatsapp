@@ -631,3 +631,63 @@ ion-app {
   border-radius: 4px;
   user-select: none;
 }
+
+.wa-new-chat-modal::part(content) {
+  --background: var(--wa-list-bg);
+}
+
+.wa-new-chat__section-title {
+  padding: 16px 16px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--wa-teal);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.wa-new-chat__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 32px 16px;
+  color: var(--wa-text-secondary);
+  text-align: center;
+}
+
+.wa-new-chat__avatar {
+  display: flex;
+  align-items: center;
+  margin-inline-end: 12px;
+}
+
+.wa-new-chat__phone-icon {
+  color: var(--wa-teal);
+  font-size: 1.4rem;
+}
+
+.wa-new-chat__phone-card {
+  margin: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--wa-list-bg);
+  border: 1px solid var(--wa-border);
+}
+
+.wa-new-chat__phone-input {
+  --background: #ffffff;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.wa-new-chat__phone-error {
+  margin: 0 4px 8px;
+  font-size: 0.8rem;
+  color: #ea4335;
+}
+
+.wa-new-chat__phone-btn {
+  --background: var(--wa-teal);
+  margin-top: 4px;
+}

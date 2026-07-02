@@ -16,7 +16,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onC
   const { participant, lastMessage, unreadCount } = conversation;
   const isSent = lastMessage.senderId === currentUser.id;
   const previewText = getMessagePreview(lastMessage);
-  const preview = isSent ? `Você: ${previewText}` : previewText;
+  const preview = previewText ? (isSent ? `Você: ${previewText}` : previewText) : '';
 
   return (
     <IonItem

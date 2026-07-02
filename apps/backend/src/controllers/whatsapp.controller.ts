@@ -103,10 +103,11 @@ export async function logout(req: Request, res: Response, next: NextFunction): P
   }
 }
 
-export async function getContacts(_req: Request, res: Response, next: NextFunction): Promise<void> {
+export async function getContacts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const instanceId = await saasWhatsApp.resolveInstanceId();
-    const contacts = await saasWhatsApp.getContacts(instanceId);
+    const filter = req.query.filter === 'all' ? 'all' : 'named';
+    const contacts = await saasWhatsApp.getContacts(instanceId, { filter });
     res.json(contacts);
   } catch (err) {
     next(err);

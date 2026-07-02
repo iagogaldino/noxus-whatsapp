@@ -3,13 +3,27 @@ import {
   extractMediaFileName,
   normalizeMediaMessageText,
 } from '../utils/message';
+import { formatPhoneLabel, isValidWhatsAppPhone } from '../utils/phone';
 import { authRequest, API_BASE, getAuthToken, parseError } from './apiClient';
 
 export interface WhatsAppContact {
-  id: string;
   jid: string;
-  phone?: string;
+  name: string;
+  phone: string;
   notify?: string;
+}
+
+export function contactDisplayName(contact: WhatsAppContact): string {
+  const notify = contact.notify?.trim();
+  const name = contact.name?.trim();
+  if (notify) return notify;
+  if (name) return name;
+  return formatPhoneLabel(contact.phone || normalizePhone(contact.jid));
+}
+
+export function contactChatId(contact: WhatsAppContact): string {
+  const phone = normalizePhone(contact.phone || contact.jid);
+  return phone || contact.jid.split('@')[0] || contact.jid;
 }
 
 export interface ConversationMessagesResponse {
@@ -90,8 +104,21 @@ export function mapApiMessageToChat(
   };
 }
 
-export async function fetchContacts(): Promise<WhatsAppContact[]> {
-  return authRequest<WhatsAppContact[]>('/api/v1/whatsapp/contacts');
+export async function fetchContacts(filter: 'named' | 'all' = 'all'): Promise<WhatsAppContact[]> {
+  const data = await authRequest<WhatsAppContact[] | { items?: WhatsAppContact[] }>(
+    `/api/v1/whatsapp/contacts?filter=${filter}`,
+  );
+
+  const items = Array.isArray(data) ? data : (data.items ?? []);
+
+  return items
+    .map((contact) => ({
+      jid: contact.jid,
+      name: contact.name ?? '',
+      phone: contact.phone || normalizePhone(contact.jid),
+      notify: contact.notify,
+    }))
+    .filter((contact) => contactChatId(contact).length > 0);
 }
 
 export async function fetchConversations(limit = 200): Promise<ConversationsResponse> {

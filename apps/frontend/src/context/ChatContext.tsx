@@ -58,6 +58,7 @@ interface ChatContextValue {
   getMessages: (chatId: string) => Message[];
   getConversation: (chatId: string) => Conversation | undefined;
   loadChatHistory: (chatId: string) => Promise<void>;
+  startConversation: (chatId: string, participantName: string) => void;
   sendMessage: (chatId: string, text: string) => Promise<void>;
   sendAttachment: (chatId: string, file: File, caption?: string) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
@@ -74,6 +75,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const loadedChatsRef = useRef<Set<string>>(new Set());
+  const draftChatIdsRef = useRef<Set<string>>(new Set());
 
   const currentUser = useMemo<User>(
     () => ({
@@ -384,7 +386,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             );
           });
         } else {
-          setConversations((prev) => prev.filter((c) => c.id !== chatId));
+          setMessagesByChat((prev) => ({
+            ...prev,
+            [chatId]: [],
+          }));
+
+          if (!draftChatIdsRef.current.has(chatId)) {
+            setConversations((prev) => prev.filter((c) => c.id !== chatId));
+          }
         }
 
         loadedChatsRef.current.add(chatId);
@@ -394,6 +403,50 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     },
     [session, currentUser.id],
   );
+
+  const startConversation = useCallback((chatId: string, participantName: string) => {
+    const normalizedId = normalizePhone(chatId) || chatId.trim();
+    if (!normalizedId) return;
+
+    draftChatIdsRef.current.add(normalizedId);
+    loadedChatsRef.current.delete(normalizedId);
+
+    setConversations((prev) => {
+      const existing = prev.find((conversation) => conversation.id === normalizedId);
+      if (existing) {
+        return prev.map((conversation) =>
+          conversation.id === normalizedId
+            ? {
+                ...conversation,
+                participant: {
+                  ...conversation.participant,
+                  name: participantName || conversation.participant.name,
+                },
+              }
+            : conversation,
+        );
+      }
+
+      return [
+        {
+          id: normalizedId,
+          participant: {
+            id: normalizedId,
+            name: participantName || normalizedId,
+            avatarColor: pickAvatarColor(normalizedId),
+          },
+          lastMessage: buildPlaceholderMessage(normalizedId, ''),
+          unreadCount: 0,
+        },
+        ...prev,
+      ];
+    });
+
+    setMessagesByChat((prev) => ({
+      ...prev,
+      [normalizedId]: prev[normalizedId] ?? [],
+    }));
+  }, []);
 
   const sendMessage = useCallback(
     async (chatId: string, text: string) => {
@@ -415,6 +468,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const socketResult = await chatSocket.sendMessage(chatId, trimmed);
 
       if (socketResult.ok) {
+        draftChatIdsRef.current.delete(chatId);
         if (socketResult.message) {
           updateMessage(chatId, clientId, {
             id: socketResult.message.id,
@@ -429,6 +483,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         await sendMessageRest(chatId, trimmed);
+        draftChatIdsRef.current.delete(chatId);
         updateMessage(chatId, clientId, { status: 'sent' });
       } catch {
         updateMessage(chatId, clientId, { status: 'failed' });
@@ -467,6 +522,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         await sendAttachmentRest(chatId, file, caption);
+        draftChatIdsRef.current.delete(chatId);
         URL.revokeObjectURL(objectUrl);
 
         const response = await fetchConversationMessages(chatId, { limit: 50 });
@@ -528,6 +584,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       loadChatHistory,
+      startConversation,
       sendMessage,
       sendAttachment,
       markAsRead,
@@ -543,6 +600,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       loadChatHistory,
+      startConversation,
       sendMessage,
       sendAttachment,
       markAsRead,
