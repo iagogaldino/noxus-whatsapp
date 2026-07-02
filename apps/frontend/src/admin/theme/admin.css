@@ -762,6 +762,191 @@
   text-transform: none;
 }
 
+/* ── WhatsApp connection card ── */
+.admin-whatsapp-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  background: var(--admin-surface);
+  border: 1px solid var(--admin-border);
+  border-radius: 14px;
+  padding: 16px 18px;
+}
+
+.admin-whatsapp-card--connected {
+  border-color: #86efac;
+  background: linear-gradient(135deg, #f0fdf4 0%, #ffffff 100%);
+}
+
+.admin-whatsapp-card--pairing {
+  border-color: #fde68a;
+  background: linear-gradient(135deg, #fffbeb 0%, #ffffff 100%);
+}
+
+.admin-whatsapp-card--disconnected {
+  border-color: var(--admin-border);
+}
+
+.admin-whatsapp-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  background: #dcfce7;
+  color: #25d366;
+}
+
+.admin-whatsapp-card__icon ion-icon {
+  font-size: 1.6rem;
+}
+
+.admin-whatsapp-card--connected .admin-whatsapp-card__icon {
+  background: #bbf7d0;
+  color: #15803d;
+}
+
+.admin-whatsapp-card__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-whatsapp-card__label {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--admin-text);
+}
+
+.admin-whatsapp-card__hint {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--admin-text-muted);
+  margin-top: 2px;
+}
+
+.admin-whatsapp-card__action {
+  flex-shrink: 0;
+  text-transform: none;
+  --border-radius: 10px;
+}
+
+.admin-whatsapp-card__spinner {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  color: var(--admin-warning);
+}
+
+/* ── WhatsApp pairing modal ── */
+.admin-pairing-modal {
+  --width: min(360px, calc(100vw - 32px));
+  --height: 420px;
+  --border-radius: 16px;
+  --box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18);
+}
+
+.admin-pairing-modal::part(content) {
+  overflow: hidden;
+}
+
+.admin-pairing-modal__page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--admin-surface);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.admin-pairing-modal__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 0;
+  padding: 16px 20px 20px;
+  overflow: hidden;
+}
+
+.admin-pairing-modal__content {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.admin-pairing-modal__state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  max-width: 100%;
+  gap: 12px;
+}
+
+.admin-pairing-modal__spinner {
+  width: 40px;
+  height: 40px;
+  color: var(--admin-primary);
+}
+
+.admin-pairing-modal__message {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--admin-text);
+  margin: 0;
+}
+
+.admin-pairing-modal__message--error {
+  color: var(--admin-danger);
+  font-weight: 500;
+}
+
+.admin-pairing-modal__qr-placeholder {
+  width: min(240px, 100%);
+  aspect-ratio: 1;
+  flex-shrink: 0;
+  border-radius: 12px;
+  border: 2px dashed var(--admin-border);
+  background:
+    linear-gradient(90deg, #e9edef 1px, transparent 1px),
+    linear-gradient(#e9edef 1px, transparent 1px),
+    #ffffff;
+  background-size: 16px 16px;
+  box-shadow: inset 0 0 0 12px #ffffff;
+  box-sizing: border-box;
+}
+
+.admin-pairing-modal__state--success .admin-pairing-modal__success-icon {
+  font-size: 4rem;
+  color: var(--admin-success);
+}
+
+.admin-pairing-modal__state--error {
+  gap: 16px;
+}
+
+.admin-pairing-modal__cancel {
+  flex-shrink: 0;
+  margin-top: 12px;
+  width: 100%;
+  max-width: 100%;
+  --border-radius: 10px;
+  --border-width: 1px;
+  --border-color: var(--admin-border);
+  --color: var(--admin-text);
+  text-transform: none;
+}
+
 .admin-fab {
   --background: var(--admin-primary);
   --box-shadow: 0 4px 16px rgba(7, 94, 84, 0.35);

@@ -9,6 +9,7 @@ import {
 } from '@ionic/react';
 import { Route } from 'react-router-dom';
 import { EmployeeProvider } from '../context/EmployeeContext';
+import { WhatsAppConnectionProvider } from '../context/WhatsAppConnectionContext';
 import AdminDashboard from '../pages/AdminDashboard';
 import EmployeeForm from '../pages/EmployeeForm';
 import EmployeeList from '../pages/EmployeeList';
@@ -26,30 +27,32 @@ const AdminRoutes: React.FC = () => (
 
 const AdminLayout: React.FC = () => (
   <EmployeeProvider>
-    <AdminRoute>
-      <div className="admin-app-shell">
-        <IonMenu contentId="admin-main" menuId="admin-menu" className="admin-menu ion-hide-md-up">
-          <IonHeader>
-            <IonToolbar className="admin-toolbar">
-              <IonTitle>Menu</IonTitle>
-            </IonToolbar>
-          </IonHeader>
-          <IonContent>
-            <AdminMenu />
-          </IonContent>
-        </IonMenu>
+    <WhatsAppConnectionProvider>
+      <AdminRoute>
+        <div className="admin-app-shell">
+          <IonMenu contentId="admin-main" menuId="admin-menu" className="admin-menu ion-hide-md-up">
+            <IonHeader>
+              <IonToolbar className="admin-toolbar">
+                <IonTitle>Menu</IonTitle>
+              </IonToolbar>
+            </IonHeader>
+            <IonContent>
+              <AdminMenu />
+            </IonContent>
+          </IonMenu>
 
-        <IonSplitPane contentId="admin-main" when="md" className="admin-split-pane admin-app">
-          <div className="admin-sidebar ion-hide-md-down">
-            <AdminMenu />
-          </div>
+          <IonSplitPane contentId="admin-main" when="md" className="admin-split-pane admin-app">
+            <div className="admin-sidebar ion-hide-md-down">
+              <AdminMenu />
+            </div>
 
-          <IonRouterOutlet id="admin-main">
-            <AdminRoutes />
-          </IonRouterOutlet>
-        </IonSplitPane>
-      </div>
-    </AdminRoute>
+            <IonRouterOutlet id="admin-main">
+              <AdminRoutes />
+            </IonRouterOutlet>
+          </IonSplitPane>
+        </div>
+      </AdminRoute>
+    </WhatsAppConnectionProvider>
   </EmployeeProvider>
 );
 
