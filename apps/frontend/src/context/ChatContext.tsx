@@ -59,6 +59,7 @@ interface ChatContextValue {
   getMessages: (chatId: string) => Message[];
   getConversation: (chatId: string) => Conversation | undefined;
   isChatLoading: (chatId: string) => boolean;
+  isChatHistoryLoaded: (chatId: string) => boolean;
   loadChatHistory: (chatId: string) => Promise<void>;
   startConversation: (chatId: string, participantName: string) => void;
   sendMessage: (chatId: string, text: string) => Promise<void>;
@@ -377,6 +378,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [loadingChatIds],
   );
 
+  const isChatHistoryLoaded = useCallback((chatId: string) => loadedChatsRef.current.has(chatId), []);
+
   const setChatLoading = useCallback((chatId: string, loading: boolean) => {
     setLoadingChatIds((prev) => {
       const next = new Set(prev);
@@ -672,6 +675,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       isChatLoading,
+      isChatHistoryLoaded,
       loadChatHistory,
       startConversation,
       sendMessage,
@@ -690,6 +694,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       isChatLoading,
+      isChatHistoryLoaded,
       loadChatHistory,
       startConversation,
       sendMessage,

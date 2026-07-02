@@ -11,14 +11,33 @@ import { useChat } from '../context/ChatContext';
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, isChatLoading, forwardConversation, currentUser } =
-    useChat();
+  const prevChatIdRef = useRef(id);
+  const {
+    getConversation,
+    getMessages,
+    sendMessage,
+    sendAttachment,
+    markAsRead,
+    loadChatHistory,
+    isChatHistoryLoaded,
+    forwardConversation,
+    currentUser,
+  } = useChat();
 
   const [forwardModalOpen, setForwardModalOpen] = useState(false);
+  const [historyReadyFor, setHistoryReadyFor] = useState<string | undefined>(id);
 
-  const conversation = getConversation(id);
-  const messages = getMessages(id);
-  const isLoadingMessages = Boolean(id && isChatLoading(id) && messages.length === 0);
+  const justSwitchedChat = prevChatIdRef.current !== id;
+  if (justSwitchedChat) {
+    prevChatIdRef.current = id;
+  }
+
+  const conversation = id ? getConversation(id) : undefined;
+  const messages = id
+    ? getMessages(id).filter((message) => message.chatId === id)
+    : [];
+  const showMessageSkeleton =
+    Boolean(id) && (justSwitchedChat || historyReadyFor !== id);
   const lastMessageId = messages[messages.length - 1]?.id;
 
   const scrollToBottom = useCallback(async () => {
@@ -54,20 +73,33 @@ const ChatDetail: React.FC = () => {
   useEffect(() => {
     if (!id) return;
 
+    let cancelled = false;
     markAsRead(id);
 
+    if (isChatHistoryLoaded(id)) {
+      setHistoryReadyFor(id);
+      return scrollToBottomWithRetries();
+    }
+
     void loadChatHistory(id).finally(() => {
-      scrollToBottomWithRetries();
+      if (!cancelled) {
+        setHistoryReadyFor(id);
+        scrollToBottomWithRetries();
+      }
     });
-  }, [id, markAsRead, loadChatHistory, scrollToBottomWithRetries]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, markAsRead, loadChatHistory, isChatHistoryLoaded, scrollToBottomWithRetries]);
 
   useEffect(() => {
-    if (!id || !conversation || isLoadingMessages) return;
+    if (!id || !conversation || showMessageSkeleton) return;
 
     return scrollToBottomWithRetries();
-  }, [id, conversation, isLoadingMessages, messages.length, lastMessageId, scrollToBottomWithRetries]);
+  }, [id, conversation, showMessageSkeleton, messages.length, lastMessageId, scrollToBottomWithRetries]);
 
-  if (!conversation) {
+  if (!id || !conversation) {
     return (
       <IonPage>
         <IonContent>
@@ -80,17 +112,17 @@ const ChatDetail: React.FC = () => {
   }
 
   return (
-    <IonPage>
+    <IonPage key={id}>
       <ChatHeader
         user={conversation.participant}
         showBack
         onForward={() => setForwardModalOpen(true)}
       />
       <IonContent ref={contentRef} className="wa-chat-bg">
-        {isLoadingMessages ? (
+        {showMessageSkeleton ? (
           <MessageListSkeleton />
         ) : (
-          <div className="wa-message-list">
+          <div key={id} className="wa-message-list">
             {messages.map((message) => (
               <MessageBubble
                 key={message.id}
