@@ -24,7 +24,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
       <div
         className={`wa-bubble ${isSent ? 'wa-bubble--sent' : 'wa-bubble--received'} ${
           type !== 'text' ? 'wa-bubble--media' : ''
-        }`}
+        } ${type === 'audio' ? 'wa-bubble--audio' : ''}`}
       >
         {type === 'image' && attachment && (
           <ImageMessageContent messageId={message.id} attachment={attachment} />
@@ -35,7 +35,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
         )}
 
         {type === 'audio' && attachment && (
-          <AudioMessageContent messageId={message.id} attachment={attachment} />
+          <AudioMessageContent messageId={message.id} attachment={attachment} isSent={isSent} />
         )}
 
         {type === 'text' && <FormattedMessageText text={message.text} className="wa-bubble__text" />}
