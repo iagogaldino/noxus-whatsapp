@@ -8,6 +8,25 @@ import type {
 } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
 
+export function slugifyContactName(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, '-');
+}
+
+export function nameAliasChatId(contactName: string): string {
+  return `name:${slugifyContactName(contactName)}`;
+}
+
+/** Preserva ids `name:*`; telefones são normalizados para dígitos. */
+export function normalizeChatId(chatId: string): string {
+  if (chatId.startsWith('name:')) return chatId;
+  return normalizePhone(chatId) || chatId;
+}
+
+function toJid(chatId: string): string {
+  if (chatId.startsWith('name:')) return `${chatId}@unknown`;
+  return `${normalizePhone(chatId)}@s.whatsapp.net`;
+}
+
 export interface PersistMessageInput {
   instanceId: string;
   chatId: string;
@@ -20,10 +39,6 @@ export interface PersistMessageInput {
   mediaUrl?: string;
   mediaMimeType?: string;
   participantName?: string;
-}
-
-function toJid(chatId: string): string {
-  return `${normalizePhone(chatId)}@s.whatsapp.net`;
 }
 
 function toSaasMessage(doc: {
@@ -49,7 +64,7 @@ function toSaasMessage(doc: {
 }
 
 export async function saveMessage(input: PersistMessageInput): Promise<void> {
-  const chatId = normalizePhone(input.chatId);
+  const chatId = normalizeChatId(input.chatId);
   const jid = input.jid ?? toJid(chatId);
   const timestamp = new Date(input.timestamp);
   const type = input.type ?? 'conversation';
@@ -119,6 +134,8 @@ export async function listConversations(
   instanceId: string,
   limit = 200,
 ): Promise<SaasConversationSummary[]> {
+  await deduplicateNameAliasConversations(instanceId);
+
   const docs = await ChatConversation.find({ instanceId })
     .sort({ lastMessageAt: -1 })
     .limit(limit)
@@ -143,7 +160,7 @@ export async function listMessages(
   chatId: string,
   options: { limit?: number; beforeMessageId?: string } = {},
 ): Promise<SaasConversationMessagesResponse> {
-  const normalizedChatId = normalizePhone(chatId);
+  const normalizedChatId = normalizeChatId(chatId);
   const limit = Math.min(Math.max(options.limit ?? 20, 1), 100);
 
   const filter: Record<string, unknown> = {
@@ -179,8 +196,91 @@ export async function listMessages(
 export async function countMessages(instanceId: string, chatId: string): Promise<number> {
   return ChatMessage.countDocuments({
     instanceId,
-    chatId: normalizePhone(chatId),
+    chatId: normalizeChatId(chatId),
   });
+}
+
+export interface ResolvedIncomingIdentity {
+  chatId: string;
+  participantName: string;
+}
+
+export async function resolveIncomingIdentity(
+  payload: SaasIncomingMessageEvent,
+  instanceId: string,
+): Promise<ResolvedIncomingIdentity | null> {
+  const participantName = payload.to?.trim() || 'Desconhecido';
+
+  const fromPhone = normalizePhone(payload.from || '');
+  if (fromPhone) {
+    return { chatId: fromPhone, participantName: payload.to ?? fromPhone };
+  }
+
+  if (payload.jid) {
+    const jidPhone = normalizePhone(payload.jid);
+    if (jidPhone) {
+      return { chatId: jidPhone, participantName: payload.to ?? jidPhone };
+    }
+  }
+
+  if (payload.to) {
+    const phoneFromContacts = await lookupChatIdByContactName(instanceId, payload.to);
+    if (phoneFromContacts) {
+      return { chatId: phoneFromContacts, participantName: payload.to };
+    }
+  }
+
+  if (payload.to) {
+    return { chatId: nameAliasChatId(payload.to), participantName: payload.to };
+  }
+
+  const instanceFallback = normalizePhone(instanceId);
+  if (instanceFallback) {
+    return { chatId: instanceFallback, participantName };
+  }
+
+  return null;
+}
+
+async function mergeNameAliasConversation(
+  instanceId: string,
+  identity: ResolvedIncomingIdentity,
+): Promise<void> {
+  if (identity.chatId.startsWith('name:') || !identity.participantName) return;
+
+  const aliasChatId = nameAliasChatId(identity.participantName);
+  if (aliasChatId === identity.chatId) return;
+
+  const aliasConversation = await ChatConversation.findOne({ instanceId, chatId: aliasChatId });
+  if (!aliasConversation) return;
+
+  await ChatMessage.updateMany(
+    { instanceId, chatId: aliasChatId },
+    { $set: { chatId: identity.chatId, jid: toJid(identity.chatId) } },
+  );
+  await ChatConversation.deleteOne({ instanceId, chatId: aliasChatId });
+}
+
+async function deduplicateNameAliasConversations(instanceId: string): Promise<void> {
+  const aliases = await ChatConversation.find({
+    instanceId,
+    chatId: { $regex: /^name:/ },
+  }).lean();
+
+  for (const alias of aliases) {
+    const phoneConversation = await ChatConversation.findOne({
+      instanceId,
+      participantName: alias.participantName,
+      chatId: { $not: { $regex: /^name:/ } },
+    }).lean();
+
+    if (!phoneConversation) continue;
+
+    await mergeNameAliasConversation(instanceId, {
+      chatId: phoneConversation.chatId,
+      participantName: alias.participantName,
+    });
+  }
 }
 
 export function resolveIncomingChatId(
@@ -197,7 +297,7 @@ export function resolveIncomingChatId(
 
   const contactName = payload.to?.trim();
   if (contactName) {
-    return `name:${contactName.toLowerCase().replace(/\s+/g, '-')}`;
+    return nameAliasChatId(contactName);
   }
 
   if (options.instanceId) {
@@ -242,11 +342,20 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
   };
 }
 
-export async function persistIncomingMessage(raw: unknown): Promise<void> {
+export interface InboundChatMessageEvent {
+  id: string;
+  chatId: string;
+  text: string;
+  senderId: string;
+  timestamp: string;
+  fromName: string | null;
+}
+
+export async function persistIncomingMessage(raw: unknown): Promise<InboundChatMessageEvent | null> {
   const payload = parseIncomingPayload(raw);
   if (!payload) {
     console.warn('[Chat] Payload de mensagem recebida inválido:', raw);
-    return;
+    return null;
   }
 
   let instanceId = payload.instanceId;
@@ -255,37 +364,43 @@ export async function persistIncomingMessage(raw: unknown): Promise<void> {
     instanceId = await resolveInstanceId();
   }
 
-  let chatId = resolveIncomingChatId(payload, { instanceId });
-
-  if (!normalizePhone(payload.from || '') && !payload.jid && payload.to) {
-    const phoneFromContacts = await lookupChatIdByContactName(instanceId, payload.to);
-    if (phoneFromContacts) chatId = phoneFromContacts;
-  }
-
-  if (!chatId) {
+  const identity = await resolveIncomingIdentity(payload, instanceId);
+  if (!identity) {
     console.warn('[Chat] Mensagem recebida sem identificador do remetente; não persistida.', {
       messageId: payload.messageId,
       from: payload.from,
       jid: payload.jid,
       to: payload.to,
     });
-    return;
+    return null;
   }
 
   try {
+    await mergeNameAliasConversation(instanceId, identity);
+
     await saveMessage({
       instanceId,
-      chatId,
+      chatId: identity.chatId,
       externalId: payload.messageId,
       jid: payload.jid,
       fromMe: false,
       text: payload.text,
       timestamp: payload.timestamp,
-      participantName: payload.to ?? chatId,
+      participantName: identity.participantName,
     });
   } catch (err) {
     console.error('[Chat] Erro ao persistir mensagem recebida:', err);
+    return null;
   }
+
+  return {
+    id: payload.messageId,
+    chatId: identity.chatId,
+    text: payload.text,
+    senderId: identity.chatId,
+    timestamp: payload.timestamp,
+    fromName: identity.participantName,
+  };
 }
 
 const contactPhoneByName = new Map<string, string>();

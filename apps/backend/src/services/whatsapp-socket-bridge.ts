@@ -1,14 +1,17 @@
 import { io as ioClient, Socket } from 'socket.io-client';
 import { env } from '../config/env.js';
-import type { SaasIncomingMessageEvent, SaasSendMessageAck } from '../types/saas-whatsapp.js';
+import type { SaasSendMessageAck } from '../types/saas-whatsapp.js';
+import {
+  type InboundChatMessageEvent,
+  persistIncomingMessage,
+} from './chat-persistence.service.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
 
-type MessageListener = (payload: SaasIncomingMessageEvent) => void;
+type MessageListener = (event: InboundChatMessageEvent) => void;
 
 class WhatsAppSocketBridge {
   private saasSocket: Socket | null = null;
   private instanceId: string | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private messageListeners = new Set<MessageListener>();
   private connecting = false;
 
@@ -42,15 +45,14 @@ class WhatsAppSocketBridge {
         instanceId,
       },
       reconnection: true,
-      reconnectionAttempts: 10,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
+      reconnectionDelayMax: 15000,
       timeout: 15000,
     });
 
-    this.saasSocket.on('whatsapp.message.received', (payload: SaasIncomingMessageEvent) => {
-      for (const listener of this.messageListeners) {
-        listener(payload);
-      }
+    this.saasSocket.on('whatsapp.message.received', (payload: unknown) => {
+      void this.handleIncomingMessage(payload);
     });
 
     this.saasSocket.on('connect', () => {
@@ -71,12 +73,18 @@ class WhatsAppSocketBridge {
     this.connecting = false;
   }
 
-  disconnect(clearInstance = true): void {
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
+  private async handleIncomingMessage(raw: unknown): Promise<void> {
+    const event = await persistIncomingMessage(raw);
+    if (!event) return;
 
+    console.log(`[Chat] Mensagem salva no banco (${event.chatId})`);
+
+    for (const listener of this.messageListeners) {
+      listener(event);
+    }
+  }
+
+  disconnect(clearInstance = true): void {
     if (this.saasSocket) {
       this.saasSocket.removeAllListeners();
       this.saasSocket.disconnect();
@@ -121,8 +129,9 @@ class WhatsAppSocketBridge {
 
 export const whatsappSocketBridge = new WhatsAppSocketBridge();
 
-export async function bootstrapWhatsAppSocket(): Promise<void> {
+export async function ensureWhatsAppBridgeConnected(): Promise<void> {
   if (!env.SAAS_WHATSAPP_API_KEY) return;
+  if (whatsappSocketBridge.isConnected()) return;
 
   try {
     const { resolveInstanceId, getStatus } = await import('./saas-whatsapp.service.js');
@@ -132,6 +141,18 @@ export async function bootstrapWhatsAppSocket(): Promise<void> {
       await whatsappSocketBridge.connect(instanceId);
     }
   } catch (err) {
-    console.warn('[WhatsApp Bridge] Bootstrap ignorado:', err);
+    console.warn('[WhatsApp Bridge] Falha ao garantir conexão:', err);
   }
+}
+
+export async function bootstrapWhatsAppSocket(): Promise<void> {
+  await ensureWhatsAppBridgeConnected();
+}
+
+const BRIDGE_KEEPALIVE_MS = 30_000;
+
+export function startWhatsAppBridgeKeepalive(): void {
+  setInterval(() => {
+    void ensureWhatsAppBridgeConnected();
+  }, BRIDGE_KEEPALIVE_MS);
 }

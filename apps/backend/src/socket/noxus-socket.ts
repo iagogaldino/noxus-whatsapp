@@ -3,14 +3,8 @@ import jwt from 'jsonwebtoken';
 import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
-import type { SaasIncomingMessageEvent } from '../types/saas-whatsapp.js';
 import { normalizePhone, resolveInstanceId } from '../services/saas-whatsapp.service.js';
-import {
-  parseIncomingPayload,
-  persistIncomingMessage,
-  resolveIncomingChatId,
-  saveMessage,
-} from '../services/chat-persistence.service.js';
+import { saveMessage } from '../services/chat-persistence.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -47,43 +41,8 @@ function authenticateSocket(socket: Socket): AuthPayload | null {
   }
 }
 
-function mapIncomingPayload(
-  raw: unknown,
-  instanceId?: string,
-): ChatMessageReceivedEvent | null {
-  const payload = parseIncomingPayload(raw);
-  if (!payload) return null;
-
-  const chatId = resolveIncomingChatId(payload, {
-    instanceId: instanceId ?? payload.instanceId,
-  });
-  if (!chatId) return null;
-
-  return {
-    id: payload.messageId,
-    chatId,
-    text: payload.text,
-    senderId: chatId,
-    timestamp: payload.timestamp,
-    fromName: payload.to,
-  };
-}
-
-async function handleIncomingMessage(raw: unknown): Promise<void> {
-  const payload = parseIncomingPayload(raw);
-  if (!payload) return;
-
-  let instanceId = payload.instanceId;
-  if (!instanceId) {
-    instanceId = await resolveInstanceId();
-  }
-
-  const event = mapIncomingPayload(raw, instanceId);
-  if (event) {
-    io?.to('whatsapp-chat').emit('chat:message:received', event);
-  }
-
-  await persistIncomingMessage(raw);
+async function handleIncomingMessage(event: ChatMessageReceivedEvent): Promise<void> {
+  io?.to('whatsapp-chat').emit('chat:message:received', event);
 }
 
 export function createNoxusSocketServer(httpServer: HttpServer): Server {
@@ -156,8 +115,8 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
     });
   });
 
-  whatsappSocketBridge.onMessageReceived((payload) => {
-    void handleIncomingMessage(payload);
+  whatsappSocketBridge.onMessageReceived((event) => {
+    void handleIncomingMessage(event);
   });
 
   return io;
