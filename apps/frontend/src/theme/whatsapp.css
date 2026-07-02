@@ -1,0 +1,434 @@
+html,
+body,
+#root,
+ion-app {
+  height: 100%;
+}
+
+.wa-app {
+  height: 100%;
+}
+
+.wa-split-pane {
+  --side-width: 380px;
+  --side-max-width: 480px;
+  --side-min-width: 300px;
+  height: 100%;
+}
+
+@media (max-width: 767.98px) {
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar {
+    display: none !important;
+  }
+}
+
+@media (min-width: 768px) {
+  ion-split-pane.wa-split-pane.split-pane-visible {
+    display: flex;
+    flex-direction: row;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar {
+    display: flex;
+    flex-direction: column;
+    flex: 0 0 var(--side-width);
+    width: var(--side-width);
+    max-width: var(--side-max-width);
+    min-width: var(--side-min-width);
+    height: 100%;
+    background: var(--wa-list-bg);
+    border-right: 1px solid var(--wa-border);
+    overflow: hidden;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content {
+    flex: 1;
+    --background: var(--wa-list-bg);
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll) {
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 0, 0, 0.28) transparent;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll)::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll)::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll)::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.28);
+    border-radius: 4px;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-chat-item {
+    --padding-end: 8px;
+    --inner-padding-end: 4px;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-chat-item__time,
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-unread-badge {
+    flex-shrink: 0;
+  }
+
+  ion-split-pane.wa-split-pane > ion-router-outlet.split-pane-main {
+    position: relative !important;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+    left: auto !important;
+    right: auto !important;
+    width: auto !important;
+  }
+
+  ion-split-pane.wa-split-pane ion-router-outlet .ion-page {
+    position: absolute !important;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+  }
+}
+
+.wa-toolbar ion-button {
+  --padding-start: 8px;
+  --padding-end: 8px;
+  margin: 0;
+}
+
+.wa-chat-list {
+  --background: var(--wa-list-bg);
+  border-right: 1px solid var(--wa-border);
+}
+
+.wa-chat-bg {
+  --background: var(--wa-chat-bg);
+  background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+.wa-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  background: #f0f2f5;
+  color: var(--wa-text-secondary);
+  text-align: center;
+  padding: 2rem;
+}
+
+.wa-empty-state ion-icon {
+  font-size: 6rem;
+  color: #d1d7db;
+  margin-bottom: 1.5rem;
+}
+
+.wa-empty-state h2 {
+  font-size: 2rem;
+  font-weight: 300;
+  color: var(--wa-text-primary);
+  margin: 0 0 1rem;
+}
+
+.wa-empty-state p {
+  font-size: 0.9rem;
+  max-width: 500px;
+  line-height: 1.5;
+}
+
+.wa-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 500;
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.wa-avatar--large {
+  width: 200px;
+  height: 200px;
+  font-size: 4rem;
+  margin: 0 auto 1rem;
+}
+
+.wa-avatar--medium {
+  width: 40px;
+  height: 40px;
+  font-size: 0.95rem;
+}
+
+.wa-chat-item {
+  --padding-start: 12px;
+  --padding-end: 12px;
+  --inner-padding-end: 0;
+  --background: var(--wa-list-bg);
+  --background-hover: var(--wa-hover);
+  --background-activated: var(--wa-active-chat);
+  cursor: pointer;
+}
+
+.wa-chat-item--active {
+  --background: var(--wa-active-chat);
+}
+
+.wa-chat-item__content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  margin-left: 12px;
+}
+
+.wa-chat-item__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-chat-item__name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--wa-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-chat-item__time {
+  font-size: 0.75rem;
+  color: var(--wa-text-secondary);
+  flex-shrink: 0;
+}
+
+.wa-chat-item__preview {
+  font-size: 0.85rem;
+  color: var(--wa-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.wa-chat-item__preview--unread {
+  color: var(--wa-text-primary);
+  font-weight: 500;
+}
+
+.wa-unread-badge {
+  background: var(--wa-unread-badge);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  flex-shrink: 0;
+}
+
+.wa-message-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 16px 16px;
+}
+
+.wa-message-row {
+  display: flex;
+  margin-bottom: 2px;
+}
+
+.wa-message-row--sent {
+  justify-content: flex-end;
+}
+
+.wa-message-row--received {
+  justify-content: flex-start;
+}
+
+.wa-bubble {
+  max-width: 65%;
+  padding: 6px 8px 4px;
+  border-radius: 8px;
+  position: relative;
+  box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+}
+
+.wa-bubble--sent {
+  background: var(--wa-sent-bubble);
+  border-top-right-radius: 0;
+}
+
+.wa-bubble--received {
+  background: var(--wa-received-bubble);
+  border-top-left-radius: 0;
+}
+
+.wa-bubble__text {
+  font-size: 0.9rem;
+  color: var(--wa-text-primary);
+  line-height: 1.4;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.wa-bubble__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.wa-bubble__time {
+  font-size: 0.65rem;
+  color: var(--wa-text-secondary);
+}
+
+.wa-bubble__status {
+  font-size: 0.85rem;
+  color: #53bdeb;
+}
+
+.wa-input-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f0f2f5;
+}
+
+.wa-input-bar__field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  background: var(--wa-input-bg);
+  border-radius: 8px;
+  padding: 0 12px;
+  min-height: 42px;
+}
+
+.wa-input-bar__field input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 0.95rem;
+  padding: 10px 0;
+  background: transparent;
+  color: var(--wa-text-primary);
+  font-family: inherit;
+  line-height: 1.4;
+}
+
+.wa-input-bar__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: var(--wa-text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+}
+
+.wa-input-bar__send {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: var(--wa-teal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.wa-input-bar__send ion-icon {
+  color: white;
+  font-size: 1.2rem;
+}
+
+.wa-footer {
+  --background: #f0f2f5;
+  box-shadow: none;
+}
+
+.wa-footer::before {
+  display: none;
+}
+
+.wa-searchbar {
+  --background: #ffffff;
+  --border-radius: 8px;
+  --box-shadow: none;
+  padding: 0 12px 8px;
+}
+
+.wa-profile-header {
+  background: var(--wa-primary);
+  padding: 2rem 1rem 1.5rem;
+  text-align: center;
+  color: white;
+}
+
+.wa-profile-name {
+  font-size: 1.4rem;
+  font-weight: 500;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.wa-profile-status {
+  font-size: 0.9rem;
+  opacity: 0.85;
+}
+
+.wa-profile-item {
+  --padding-start: 16px;
+  font-size: 0.95rem;
+}
+
+.wa-profile-item ion-icon {
+  color: var(--wa-text-secondary);
+  margin-right: 24px;
+}
+
+.wa-chat-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-chat-header__info {
+  min-width: 0;
+}
+
+.wa-chat-header__name {
+  font-size: 1rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-chat-header__status {
+  font-size: 0.75rem;
+  opacity: 0.85;
+}
