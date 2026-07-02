@@ -10,10 +10,10 @@ const EmptyChat: React.FC<EmptyChatProps> = ({ desktopOnly = false }) => (
     <IonContent>
       <div className="wa-empty-state">
         <IonIcon icon={chatbubblesOutline} />
-        <h2>Noxus WhatsApp</h2>
+        <h2>Noxustalk</h2>
         <p>
           Envie e receba mensagens sem manter seu celular conectado.
-          Use o Noxus WhatsApp em até 4 dispositivos vinculados e 1 celular.
+          Use o Noxustalk em até 4 dispositivos vinculados e 1 celular.
         </p>
       </div>
     </IonContent>

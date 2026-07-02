@@ -105,7 +105,7 @@ const Login: React.FC = () => {
               <div className="login-page__icon">
                 <IonIcon icon={chatbubbles} />
               </div>
-              <h1 className="login-page__title">Noxus WhatsApp</h1>
+              <h1 className="login-page__title">Noxustalk</h1>
               <p className="login-page__subtitle">
                 {step === 'phone'
                   ? 'Entre com seu número de telefone'

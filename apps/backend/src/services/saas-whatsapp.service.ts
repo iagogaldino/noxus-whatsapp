@@ -70,7 +70,7 @@ export async function listInstances(): Promise<SaasWhatsAppInstance[]> {
   return data.items ?? [];
 }
 
-export async function createInstance(name = 'Noxus WhatsApp'): Promise<SaasWhatsAppInstance> {
+export async function createInstance(name = 'Noxustalk'): Promise<SaasWhatsAppInstance> {
   const { data } = await saasRequest<SaasWhatsAppInstance>('/api/v1/instances', {
     method: 'POST',
     body: JSON.stringify({ name }),

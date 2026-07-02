@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Noxus WhatsApp</string>
-    <string name="title_activity_main">Noxus WhatsApp</string>
+    <string name="app_name">Noxustalk</string>
+    <string name="title_activity_main">Noxustalk</string>
     <string name="package_name">com.noxus.whatsapp</string>
     <string name="custom_url_scheme">com.noxus.whatsapp</string>
 </resources>

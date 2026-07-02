@@ -50,7 +50,7 @@ const AdminMenu: React.FC = () => {
           <IonIcon icon={chatbubblesOutline} />
         </div>
         <div>
-          <h2>Noxus Admin</h2>
+          <h2>Noxustalk Admin</h2>
           <p>Painel de gestão</p>
         </div>
       </div>

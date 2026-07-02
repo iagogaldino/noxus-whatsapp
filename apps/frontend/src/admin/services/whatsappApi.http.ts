@@ -17,7 +17,7 @@ class HttpWhatsAppApi implements WhatsAppApi {
   async createInstance(): Promise<WhatsAppInstance> {
     return authRequest<WhatsAppInstance>(BASE, {
       method: 'POST',
-      body: JSON.stringify({ name: 'Noxus WhatsApp' }),
+      body: JSON.stringify({ name: 'Noxustalk' }),
     });
   }
 

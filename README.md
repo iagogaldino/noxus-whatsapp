@@ -1,6 +1,6 @@
-# noxus-whatsapp
+# Noxustalk
 
-Monorepo do Noxus WhatsApp — app Ionic/React com painel admin e backend Node.js.
+Monorepo do Noxustalk — app Ionic/React com painel admin e backend Node.js.
 
 ## Estrutura
 
