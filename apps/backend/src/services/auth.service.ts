@@ -10,6 +10,7 @@ export interface PublicUser {
   phone: string;
   name: string;
   role: 'admin' | 'employee';
+  department?: string;
 }
 
 function toPublicUser(user: {
@@ -17,12 +18,14 @@ function toPublicUser(user: {
   phone: string;
   name: string;
   role: 'admin' | 'employee';
+  department?: string | null;
 }): PublicUser {
   return {
     id: user._id.toString(),
     phone: user.phone,
     name: user.name,
     role: user.role,
+    department: user.department ?? undefined,
   };
 }
 

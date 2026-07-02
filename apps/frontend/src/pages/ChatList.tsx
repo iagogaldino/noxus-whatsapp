@@ -9,7 +9,6 @@ import {
   IonList,
   IonPage,
   IonPopover,
-  IonTitle,
   IonToolbar,
 } from '@ionic/react';
 import {
@@ -40,7 +39,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const location = useLocation();
   const { replace } = useAppNavigate();
   const { filteredConversations, markAsRead, isLoading, error, startConversation } = useChat();
-  const { isAdmin } = useAuth();
+  const { isAdmin, session } = useAuth();
   const [popoverEvent, setPopoverEvent] = useState<MouseEvent | undefined>();
   const [pendingPath, setPendingPath] = useState<string | null>(null);
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -73,7 +72,12 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
     <>
       <IonHeader>
         <IonToolbar className="wa-toolbar">
-          <IonTitle>WhatsApp</IonTitle>
+          <div slot="start" className="wa-toolbar-user">
+            <span className="wa-toolbar-user__name">{session?.name ?? 'Usuário'}</span>
+            {session?.department && (
+              <span className="wa-toolbar-user__sector">{session.department}</span>
+            )}
+          </div>
           <IonButtons slot="end">
             <IonButton
               fill="clear"
