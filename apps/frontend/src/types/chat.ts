@@ -8,6 +8,15 @@ export interface User {
 
 export type MessageStatus = 'sent' | 'delivered' | 'read';
 
+export type MessageType = 'text' | 'image' | 'file';
+
+export interface MessageAttachment {
+  name: string;
+  mimeType: string;
+  size: number;
+  url: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -15,6 +24,8 @@ export interface Message {
   senderId: string;
   timestamp: Date;
   status?: MessageStatus;
+  type?: MessageType;
+  attachment?: MessageAttachment;
 }
 
 export interface Conversation {

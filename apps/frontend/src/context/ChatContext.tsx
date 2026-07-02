@@ -1,7 +1,14 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import { initialConversations, initialMessages } from '../data/mockData';
 import { Conversation, Message, User } from '../types/chat';
+import {
+  getAttachmentPreviewLabel,
+  getMessagePreview,
+  resolveMessageType,
+} from '../utils/message';
 import { useAuth } from './AuthContext';
+
+const MAX_ATTACHMENT_SIZE_BYTES = 10 * 1024 * 1024;
 
 interface ChatContextValue {
   currentUser: User;
@@ -12,6 +19,7 @@ interface ChatContextValue {
   getMessages: (chatId: string) => Message[];
   getConversation: (chatId: string) => Conversation | undefined;
   sendMessage: (chatId: string, text: string) => void;
+  sendAttachment: (chatId: string, file: File, caption?: string) => boolean;
   markAsRead: (chatId: string) => void;
 }
 
@@ -40,7 +48,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return conversations.filter(
       (conv) =>
         conv.participant.name.toLowerCase().includes(query) ||
-        conv.lastMessage.text.toLowerCase().includes(query),
+        getMessagePreview(conv.lastMessage).toLowerCase().includes(query),
     );
   }, [conversations, searchQuery]);
 
@@ -54,32 +62,73 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [conversations],
   );
 
-  const sendMessage = useCallback((chatId: string, text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed) return;
-
-    const newMessage: Message = {
-      id: `${chatId}-msg-${Date.now()}`,
-      chatId,
-      text: trimmed,
-      senderId: currentUser.id,
-      timestamp: new Date(),
-      status: 'sent',
-    };
-
+  const appendMessage = useCallback((chatId: string, message: Message) => {
     setMessagesByChat((prev) => ({
       ...prev,
-      [chatId]: [...(prev[chatId] ?? []), newMessage],
+      [chatId]: [...(prev[chatId] ?? []), message],
     }));
 
     setConversations((prev) =>
       prev
         .map((conv) =>
-          conv.id === chatId ? { ...conv, lastMessage: newMessage, unreadCount: 0 } : conv,
+          conv.id === chatId ? { ...conv, lastMessage: message, unreadCount: 0 } : conv,
         )
         .sort((a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime()),
     );
-  }, [currentUser]);
+  }, []);
+
+  const sendMessage = useCallback(
+    (chatId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      const newMessage: Message = {
+        id: `${chatId}-msg-${Date.now()}`,
+        chatId,
+        text: trimmed,
+        senderId: currentUser.id,
+        timestamp: new Date(),
+        status: 'sent',
+        type: 'text',
+      };
+
+      appendMessage(chatId, newMessage);
+    },
+    [appendMessage, currentUser.id],
+  );
+
+  const sendAttachment = useCallback(
+    (chatId: string, file: File, caption?: string): boolean => {
+      if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+        window.alert('Arquivo muito grande. O limite é 10 MB.');
+        return false;
+      }
+
+      const type = resolveMessageType(file.type || 'application/octet-stream');
+      const trimmedCaption = caption?.trim();
+      const preview = getAttachmentPreviewLabel(type, file.name);
+
+      const newMessage: Message = {
+        id: `${chatId}-msg-${Date.now()}`,
+        chatId,
+        text: trimmedCaption || preview,
+        senderId: currentUser.id,
+        timestamp: new Date(),
+        status: 'sent',
+        type,
+        attachment: {
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          size: file.size,
+          url: URL.createObjectURL(file),
+        },
+      };
+
+      appendMessage(chatId, newMessage);
+      return true;
+    },
+    [appendMessage, currentUser.id],
+  );
 
   const markAsRead = useCallback((chatId: string) => {
     setConversations((prev) =>
@@ -97,6 +146,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       sendMessage,
+      sendAttachment,
       markAsRead,
     }),
     [
@@ -107,6 +157,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getMessages,
       getConversation,
       sendMessage,
+      sendAttachment,
       markAsRead,
     ],
   );

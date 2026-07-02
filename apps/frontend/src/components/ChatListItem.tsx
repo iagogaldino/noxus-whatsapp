@@ -1,6 +1,8 @@
 import { IonItem } from '@ionic/react';
 import { Conversation } from '../types/chat';
 import { formatChatTime } from '../utils/format';
+import { getMessagePreview } from '../utils/message';
+import { useChat } from '../context/ChatContext';
 import Avatar from './Avatar';
 
 interface ChatListItemProps {
@@ -10,9 +12,11 @@ interface ChatListItemProps {
 }
 
 const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onClick }) => {
+  const { currentUser } = useChat();
   const { participant, lastMessage, unreadCount } = conversation;
-  const isSent = lastMessage.senderId === 'me';
-  const preview = isSent ? `Você: ${lastMessage.text}` : lastMessage.text;
+  const isSent = lastMessage.senderId === currentUser.id;
+  const previewText = getMessagePreview(lastMessage);
+  const preview = isSent ? `Você: ${previewText}` : previewText;
 
   return (
     <IonItem

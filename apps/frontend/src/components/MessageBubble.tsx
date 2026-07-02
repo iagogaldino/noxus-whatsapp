@@ -1,29 +1,80 @@
 import { IonIcon } from '@ionic/react';
-import { checkmarkDoneOutline } from 'ionicons/icons';
+import { checkmarkDoneOutline, documentOutline } from 'ionicons/icons';
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
+import { formatFileSize, getMessageType } from '../utils/message';
 
 interface MessageBubbleProps {
   message: Message;
   isSent: boolean;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => (
-  <div className={`wa-message-row ${isSent ? 'wa-message-row--sent' : 'wa-message-row--received'}`}>
-    <div className={`wa-bubble ${isSent ? 'wa-bubble--sent' : 'wa-bubble--received'}`}>
-      <div className="wa-bubble__text">{message.text}</div>
-      <div className="wa-bubble__meta">
-        <span className="wa-bubble__time">{formatMessageTime(message.timestamp)}</span>
-        {isSent && message.status && (
-          <IonIcon
-            icon={checkmarkDoneOutline}
-            className="wa-bubble__status"
-            style={{ color: message.status === 'read' ? '#53bdeb' : 'var(--wa-text-secondary)' }}
-          />
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
+  const type = getMessageType(message);
+  const attachment = message.attachment;
+  const hasCaption =
+    type !== 'text' &&
+    attachment &&
+    message.text !== `📷 Foto` &&
+    !message.text.startsWith('📎 ');
+
+  const handleImageClick = () => {
+    if (attachment?.url) {
+      window.open(attachment.url, '_blank', 'noopener,noreferrer');
+    }
+  };
+
+  return (
+    <div className={`wa-message-row ${isSent ? 'wa-message-row--sent' : 'wa-message-row--received'}`}>
+      <div
+        className={`wa-bubble ${isSent ? 'wa-bubble--sent' : 'wa-bubble--received'} ${
+          type !== 'text' ? 'wa-bubble--media' : ''
+        }`}
+      >
+        {type === 'image' && attachment && (
+          <button
+            type="button"
+            className="wa-bubble__image-btn"
+            onClick={handleImageClick}
+            aria-label={`Abrir imagem ${attachment.name}`}
+          >
+            <img src={attachment.url} alt={attachment.name} className="wa-bubble__image" />
+          </button>
         )}
+
+        {type === 'file' && attachment && (
+          <a
+            href={attachment.url}
+            download={attachment.name}
+            className="wa-bubble__file-card"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <IonIcon icon={documentOutline} className="wa-bubble__file-icon" />
+            <div className="wa-bubble__file-info">
+              <span className="wa-bubble__file-name">{attachment.name}</span>
+              <span className="wa-bubble__file-size">{formatFileSize(attachment.size)}</span>
+            </div>
+          </a>
+        )}
+
+        {type === 'text' && <div className="wa-bubble__text">{message.text}</div>}
+
+        {hasCaption && <div className="wa-bubble__caption">{message.text}</div>}
+
+        <div className="wa-bubble__meta">
+          <span className="wa-bubble__time">{formatMessageTime(message.timestamp)}</span>
+          {isSent && message.status && (
+            <IonIcon
+              icon={checkmarkDoneOutline}
+              className="wa-bubble__status"
+              style={{ color: message.status === 'read' ? '#53bdeb' : 'var(--wa-text-secondary)' }}
+            />
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default MessageBubble;

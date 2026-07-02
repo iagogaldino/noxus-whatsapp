@@ -1,13 +1,17 @@
 import { IonIcon } from '@ionic/react';
 import { attachOutline, micOutline, send } from 'ionicons/icons';
-import { useState, KeyboardEvent } from 'react';
+import { useRef, useState, KeyboardEvent, ChangeEvent } from 'react';
 
 interface MessageInputProps {
   onSend: (text: string) => void;
+  onSendAttachment: (file: File) => void;
 }
 
-const MessageInput: React.FC<MessageInputProps> = ({ onSend }) => {
+const FILE_ACCEPT = 'image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.zip';
+
+const MessageInput: React.FC<MessageInputProps> = ({ onSend, onSendAttachment }) => {
   const [text, setText] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSend = () => {
     if (!text.trim()) return;
@@ -22,9 +26,33 @@ const MessageInput: React.FC<MessageInputProps> = ({ onSend }) => {
     }
   };
 
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onSendAttachment(file);
+    }
+    e.target.value = '';
+  };
+
   return (
     <div className="wa-input-bar">
-      <IonIcon icon={attachOutline} className="wa-input-bar__icon" />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept={FILE_ACCEPT}
+        hidden
+        onChange={handleFileChange}
+      />
+      <IonIcon
+        icon={attachOutline}
+        className="wa-input-bar__icon"
+        onClick={handleAttachClick}
+        aria-label="Anexar arquivo"
+      />
       <div className="wa-input-bar__field">
         <input
           type="text"

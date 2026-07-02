@@ -9,7 +9,8 @@ import { useChat } from '../context/ChatContext';
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const { getConversation, getMessages, sendMessage, markAsRead, currentUser } = useChat();
+  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, currentUser } =
+    useChat();
 
   const conversation = getConversation(id);
   const messages = getMessages(id);
@@ -49,7 +50,10 @@ const ChatDetail: React.FC = () => {
         </div>
       </IonContent>
       <IonFooter className="wa-footer">
-        <MessageInput onSend={(text) => sendMessage(id, text)} />
+        <MessageInput
+          onSend={(text) => sendMessage(id, text)}
+          onSendAttachment={(file) => sendAttachment(id, file)}
+        />
       </IonFooter>
     </IonPage>
   );

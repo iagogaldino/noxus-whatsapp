@@ -304,6 +304,84 @@ ion-app {
   color: #53bdeb;
 }
 
+.wa-bubble--media {
+  padding: 4px 4px 4px;
+  max-width: min(65%, 280px);
+}
+
+.wa-bubble__image-btn {
+  display: block;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+  line-height: 0;
+}
+
+.wa-bubble__image {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 6px;
+}
+
+.wa-bubble__file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  max-width: 240px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.04);
+  text-decoration: none;
+  color: inherit;
+}
+
+.wa-bubble--sent .wa-bubble__file-card {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.wa-bubble__file-icon {
+  flex-shrink: 0;
+  font-size: 1.75rem;
+  color: var(--wa-teal);
+}
+
+.wa-bubble__file-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wa-bubble__file-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--wa-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-bubble__file-size {
+  font-size: 0.7rem;
+  color: var(--wa-text-secondary);
+}
+
+.wa-bubble__caption {
+  font-size: 0.9rem;
+  color: var(--wa-text-primary);
+  line-height: 1.4;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+  padding: 4px 4px 0;
+}
+
 .wa-input-bar {
   display: flex;
   align-items: center;
