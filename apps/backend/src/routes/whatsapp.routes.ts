@@ -13,6 +13,7 @@ whatsappRoutes.get('/status', whatsappController.getConnectionStatus);
 whatsappRoutes.get('/conversations', whatsappController.listConversations);
 whatsappRoutes.patch('/conversations/:chatId/forward', whatsappController.forwardConversation);
 whatsappRoutes.get('/contacts', whatsappController.getContacts);
+whatsappRoutes.get('/contacts/:jid/profile-photo', whatsappController.getContactProfilePhoto);
 whatsappRoutes.get('/conversations/:jid/messages', whatsappController.getConversationMessages);
 whatsappRoutes.post('/messages/send', whatsappController.sendMessage);
 whatsappRoutes.post('/messages/send-media', uploadMedia, whatsappController.sendMedia);

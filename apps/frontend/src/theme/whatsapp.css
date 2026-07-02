@@ -364,6 +364,13 @@ ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
   font-size: 0.95rem;
 }
 
+.wa-avatar__image {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .wa-chat-item {
   --padding-start: 12px;
   --padding-end: 12px;

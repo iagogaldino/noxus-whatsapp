@@ -6,6 +6,7 @@ import { User } from '../models/User.js';
 import * as chatPersistence from '../services/chat-persistence.service.js';
 import { syncConversationFromSaas } from '../services/chat-sync.service.js';
 import { getMessageMedia } from '../services/chat-media.service.js';
+import { fetchContactProfilePhoto } from '../services/contact-profile-photo.service.js';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
 import { emitConversationForwarded } from '../socket/noxus-socket.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
@@ -123,6 +124,26 @@ export async function getContacts(req: Request, res: Response, next: NextFunctio
     const filter = req.query.filter === 'all' ? 'all' : 'named';
     const contacts = await saasWhatsApp.getContacts(instanceId, { filter });
     res.json(contacts);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function getContactProfilePhoto(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const photo = await fetchContactProfilePhoto(instanceId, req.params.jid);
+    if (!photo) {
+      throw new AppError(404, 'Foto de perfil indisponível.');
+    }
+
+    res.setHeader('Content-Type', photo.mimeType);
+    res.setHeader('Cache-Control', 'private, max-age=1800');
+    res.send(photo.buffer);
   } catch (err) {
     next(err);
   }

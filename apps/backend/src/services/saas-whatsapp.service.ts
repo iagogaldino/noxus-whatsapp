@@ -130,6 +130,16 @@ export async function getContacts(
   return data.items ?? [];
 }
 
+export async function getContactProfilePhotoUrl(
+  instanceId: string,
+  jid: string,
+): Promise<string | null> {
+  const { data } = await saasRequest<{ url?: string | null }>(
+    `${instancePath(instanceId)}/whatsapp/contacts/${encodeURIComponent(jid)}/profile-photo`,
+  );
+  return data.url ?? null;
+}
+
 export async function getConversations(
   instanceId: string,
   options: { limit?: number; viewer?: ConversationViewer } = {},
