@@ -135,6 +135,47 @@ ion-app {
   background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d4cdc4' fill-opacity='0.25'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
 }
 
+ion-content.wa-chat-bg::part(background) {
+  background: var(--wa-chat-bg);
+}
+
+ion-content.wa-chat-bg::part(scroll) {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(17, 27, 33, 0.14) transparent;
+  overscroll-behavior: contain;
+}
+
+ion-content.wa-chat-bg::part(scroll):hover {
+  scrollbar-color: rgba(17, 27, 33, 0.3) transparent;
+}
+
+ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar {
+  width: 6px;
+}
+
+ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-thumb {
+  background-color: rgba(17, 27, 33, 0.14);
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background-clip: content-box;
+  transition: background-color 0.2s ease;
+}
+
+ion-content.wa-chat-bg::part(scroll):hover::-webkit-scrollbar-thumb {
+  background-color: rgba(17, 27, 33, 0.3);
+}
+
+ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-button,
+ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .wa-empty-state {
   display: flex;
   flex-direction: column;
@@ -164,6 +205,106 @@ ion-app {
   font-size: 0.9rem;
   max-width: 500px;
   line-height: 1.5;
+}
+
+@keyframes wa-skeleton-shimmer {
+  0% {
+    background-position: -240px 0;
+  }
+
+  100% {
+    background-position: calc(240px + 100%) 0;
+  }
+}
+
+.wa-skeleton {
+  display: block;
+  background: linear-gradient(90deg, #e9edef 0%, #f5f6f6 45%, #e9edef 90%);
+  background-size: 240px 100%;
+  animation: wa-skeleton-shimmer 1.3s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+.wa-skeleton--circle {
+  border-radius: 50%;
+}
+
+.wa-skeleton-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.wa-skeleton-chat-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--wa-border);
+}
+
+.wa-skeleton-chat-item--contact {
+  padding-inline: 16px;
+}
+
+.wa-skeleton-chat-item__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-skeleton-chat-item__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.wa-skeleton-chat-item__name {
+  flex: 1;
+  max-width: 62%;
+}
+
+.wa-skeleton-chat-item__preview {
+  max-width: 82%;
+}
+
+.wa-skeleton-message-list {
+  min-height: 100%;
+  justify-content: flex-end;
+}
+
+.wa-skeleton-message-row {
+  margin-bottom: 6px;
+}
+
+.wa-skeleton-message-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 65%;
+  padding: 10px 12px 8px;
+  border-radius: 8px;
+  box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.08);
+}
+
+.wa-skeleton-message-bubble--sent {
+  background: rgba(220, 248, 198, 0.65);
+  border-top-right-radius: 0;
+}
+
+.wa-skeleton-message-bubble--received {
+  background: rgba(255, 255, 255, 0.85);
+  border-top-left-radius: 0;
+}
+
+.wa-skeleton-message-bubble__line {
+  opacity: 0.85;
+}
+
+.wa-skeleton-message-bubble__meta {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 2px;
 }
 
 .wa-avatar {
@@ -269,7 +410,7 @@ ion-app {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 8px 16px 16px;
+  padding: 8px 12px 16px 16px;
 }
 
 .wa-message-row {

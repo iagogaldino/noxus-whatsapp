@@ -21,6 +21,7 @@ import {
 import { useState } from 'react';
 import { useHistory, useLocation } from 'react-router-dom';
 import ChatListItem from '../components/ChatListItem';
+import ChatListSkeleton from '../components/ChatListSkeleton';
 import NewChatModal from '../components/NewChatModal';
 import SearchBar from '../components/SearchBar';
 import { useAuth } from '../context/AuthContext';
@@ -130,9 +131,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
 
       <IonContent className={sidebar ? 'wa-sidebar-content' : undefined}>
         {isLoading ? (
-          <div className="wa-empty-state">
-            <p>Carregando conversas…</p>
-          </div>
+          <ChatListSkeleton />
         ) : error ? (
           <div className="wa-empty-state">
             <p>{error}</p>

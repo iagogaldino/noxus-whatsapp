@@ -10,7 +10,6 @@ import {
   IonList,
   IonModal,
   IonSearchbar,
-  IonSpinner,
   IonTitle,
   IonToolbar,
 } from '@ionic/react';
@@ -24,6 +23,7 @@ import {
 } from '../services/chatApi';
 import { formatPhoneLabel, isValidWhatsAppPhone, normalizePhoneInput } from '../utils/phone';
 import Avatar from './Avatar';
+import ContactListSkeleton from './ContactListSkeleton';
 
 interface NewChatModalProps {
   isOpen: boolean;
@@ -150,10 +150,7 @@ const NewChatModal: React.FC<NewChatModalProps> = ({ isOpen, onClose, onSelectCo
         <div className="wa-new-chat__section-title">Contatos na agenda</div>
 
         {isLoading ? (
-          <div className="wa-new-chat__state">
-            <IonSpinner name="crescent" />
-            <p>Carregando contatos…</p>
-          </div>
+          <ContactListSkeleton />
         ) : error ? (
           <div className="wa-new-chat__state">
             <p>{error}</p>

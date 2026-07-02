@@ -57,6 +57,7 @@ interface ChatContextValue {
   filteredConversations: Conversation[];
   getMessages: (chatId: string) => Message[];
   getConversation: (chatId: string) => Conversation | undefined;
+  isChatLoading: (chatId: string) => boolean;
   loadChatHistory: (chatId: string) => Promise<void>;
   startConversation: (chatId: string, participantName: string) => void;
   sendMessage: (chatId: string, text: string) => Promise<void>;
@@ -74,6 +75,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [loadingChatIds, setLoadingChatIds] = useState<Set<string>>(() => new Set());
   const loadedChatsRef = useRef<Set<string>>(new Set());
   const draftChatIdsRef = useRef<Set<string>>(new Set());
 
@@ -328,6 +330,23 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [conversations],
   );
 
+  const isChatLoading = useCallback(
+    (chatId: string) => loadingChatIds.has(chatId),
+    [loadingChatIds],
+  );
+
+  const setChatLoading = useCallback((chatId: string, loading: boolean) => {
+    setLoadingChatIds((prev) => {
+      const next = new Set(prev);
+      if (loading) {
+        next.add(chatId);
+      } else {
+        next.delete(chatId);
+      }
+      return next;
+    });
+  }, []);
+
   const loadChatHistory = useCallback(
     async (chatId: string) => {
       if (!session) return;
@@ -342,7 +361,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
               name: chatId,
               avatarColor: pickAvatarColor(chatId),
             },
-            lastMessage: buildPlaceholderMessage(chatId, 'Carregando…'),
+            lastMessage: buildPlaceholderMessage(chatId, ''),
             unreadCount: 0,
           },
           ...prev,
@@ -350,6 +369,8 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (loadedChatsRef.current.has(chatId)) return;
+
+      setChatLoading(chatId, true);
 
       try {
         const response = await fetchConversationMessages(chatId, { limit: 50 });
@@ -399,9 +420,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadedChatsRef.current.add(chatId);
       } catch {
         // Histórico indisponível — conversa ainda pode receber mensagens em tempo real
+      } finally {
+        setChatLoading(chatId, false);
       }
     },
-    [session, currentUser.id],
+    [session, currentUser.id, setChatLoading],
   );
 
   const startConversation = useCallback((chatId: string, participantName: string) => {
@@ -583,6 +606,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       filteredConversations,
       getMessages,
       getConversation,
+      isChatLoading,
       loadChatHistory,
       startConversation,
       sendMessage,
@@ -599,6 +623,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       filteredConversations,
       getMessages,
       getConversation,
+      isChatLoading,
       loadChatHistory,
       startConversation,
       sendMessage,

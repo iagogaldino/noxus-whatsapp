@@ -4,16 +4,18 @@ import { useParams } from 'react-router-dom';
 import ChatHeader from '../components/ChatHeader';
 import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
+import MessageListSkeleton from '../components/MessageListSkeleton';
 import { useChat } from '../context/ChatContext';
 
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, currentUser } =
+  const { getConversation, getMessages, sendMessage, sendAttachment, markAsRead, loadChatHistory, isChatLoading, currentUser } =
     useChat();
 
   const conversation = getConversation(id);
   const messages = getMessages(id);
+  const isLoadingMessages = Boolean(id && isChatLoading(id) && messages.length === 0);
   const lastMessageId = messages[messages.length - 1]?.id;
 
   const scrollToBottom = useCallback(async () => {
@@ -57,10 +59,10 @@ const ChatDetail: React.FC = () => {
   }, [id, markAsRead, loadChatHistory, scrollToBottomWithRetries]);
 
   useEffect(() => {
-    if (!id || !conversation) return;
+    if (!id || !conversation || isLoadingMessages) return;
 
     return scrollToBottomWithRetries();
-  }, [id, conversation, messages.length, lastMessageId, scrollToBottomWithRetries]);
+  }, [id, conversation, isLoadingMessages, messages.length, lastMessageId, scrollToBottomWithRetries]);
 
   if (!conversation) {
     return (
@@ -78,15 +80,19 @@ const ChatDetail: React.FC = () => {
     <IonPage>
       <ChatHeader user={conversation.participant} showBack />
       <IonContent ref={contentRef} className="wa-chat-bg">
-        <div className="wa-message-list">
-          {messages.map((message) => (
-            <MessageBubble
-              key={message.id}
-              message={message}
-              isSent={message.senderId === currentUser.id}
-            />
-          ))}
-        </div>
+        {isLoadingMessages ? (
+          <MessageListSkeleton />
+        ) : (
+          <div className="wa-message-list">
+            {messages.map((message) => (
+              <MessageBubble
+                key={message.id}
+                message={message}
+                isSent={message.senderId === currentUser.id}
+              />
+            ))}
+          </div>
+        )}
       </IonContent>
       <IonFooter className="wa-footer">
         <MessageInput
