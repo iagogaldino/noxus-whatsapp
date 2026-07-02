@@ -1,8 +1,7 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
-import { ADMIN_CREDENTIALS, seedEmployees } from '../admin/data/mockEmployees';
-import { Employee } from '../admin/types/employee';
-import { clearSession, loadEmployees, loadSession, saveSession } from '../admin/utils/storage';
-import { AuthSession } from '../types/auth';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { clearSession, loadSession, saveSession } from '../admin/utils/storage';
+import * as authApi from '../services/authApi';
+import { AuthSession, AuthUser } from '../types/auth';
 
 interface LoginResult {
   success: boolean;
@@ -14,64 +13,80 @@ interface AuthContextValue {
   session: AuthSession | null;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isLoading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-function getEmployees(): Employee[] {
-  return loadEmployees<Employee[]>() ?? seedEmployees;
-}
-
-function findEmployee(email: string, password: string): Employee | undefined {
-  const normalizedEmail = email.trim().toLowerCase();
-  return getEmployees().find(
-    (e) => e.email.toLowerCase() === normalizedEmail && e.password === password,
-  );
+function buildSession(token: string, user: AuthUser): AuthSession {
+  return {
+    token,
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role,
+    loggedInAt: new Date().toISOString(),
+  };
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [session, setSession] = useState<AuthSession | null>(() => loadSession<AuthSession>());
+  const [session, setSession] = useState<AuthSession | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function restoreSession() {
+      const stored = loadSession<AuthSession>();
+
+      if (!stored?.token) {
+        if (!cancelled) {
+          setSession(null);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const { user } = await authApi.getMe(stored.token);
+
+        if (!cancelled) {
+          const restored = buildSession(stored.token, user);
+          saveSession(restored);
+          setSession(restored);
+        }
+      } catch {
+        clearSession();
+        if (!cancelled) {
+          setSession(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void restoreSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (
-      normalizedEmail === ADMIN_CREDENTIALS.email &&
-      password === ADMIN_CREDENTIALS.password
-    ) {
-      const newSession: AuthSession = {
-        userId: 'super-admin',
-        email: normalizedEmail,
-        name: 'Administrador',
-        role: 'admin',
-        loggedInAt: new Date().toISOString(),
-      };
+    try {
+      const { token, user } = await authApi.login(email, password);
+      const newSession = buildSession(token, user);
       saveSession(newSession);
       setSession(newSession);
-      return { success: true, role: 'admin' };
+      return { success: true, role: user.role };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Erro ao entrar.';
+      return { success: false, error: message };
     }
-
-    const employee = findEmployee(email, password);
-    if (!employee) {
-      return { success: false, error: 'E-mail ou senha inválidos.' };
-    }
-
-    if (employee.status === 'inactive') {
-      return { success: false, error: 'Conta inativa. Contate o administrador.' };
-    }
-
-    const newSession: AuthSession = {
-      userId: employee.id,
-      email: employee.email,
-      name: employee.name,
-      role: employee.role,
-      loggedInAt: new Date().toISOString(),
-    };
-    saveSession(newSession);
-    setSession(newSession);
-    return { success: true, role: employee.role };
   }, []);
 
   const logout = useCallback(() => {
@@ -84,10 +99,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       session,
       isAuthenticated: !!session,
       isAdmin: session?.role === 'admin',
+      isLoading,
       login,
       logout,
     }),
-    [session, login, logout],
+    [session, isLoading, login, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

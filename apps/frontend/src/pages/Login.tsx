@@ -14,11 +14,15 @@ import { useAppNavigate } from '../utils/navigation';
 
 const Login: React.FC = () => {
   const { replace } = useAppNavigate();
-  const { login, isAuthenticated, isAdmin } = useAuth();
+  const { login, isAuthenticated, isAdmin, isLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  if (isLoading) {
+    return null;
+  }
 
   if (isAuthenticated) {
     return <Redirect to={isAdmin ? '/admin' : '/'} />;
