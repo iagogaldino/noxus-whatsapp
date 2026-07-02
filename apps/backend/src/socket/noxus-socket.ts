@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
 import type { SaasIncomingMessageEvent } from '../types/saas-whatsapp.js';
 import { normalizePhone } from '../services/saas-whatsapp.service.js';
+import { upsertConversation } from '../services/conversation-store.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -98,6 +99,19 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           timestamp: new Date().toISOString(),
           status: 'sent',
         };
+
+        upsertConversation(
+          sent.chatId,
+          {
+            id: sent.id,
+            jid: `${sent.chatId}@s.whatsapp.net`,
+            fromMe: true,
+            timestamp: sent.timestamp,
+            text: sent.text,
+            type: 'conversation',
+          },
+          sent.chatId,
+        );
 
         io?.to('whatsapp-chat').emit('chat:message:sent', sent);
         ack?.({ ok: true, message: sent });

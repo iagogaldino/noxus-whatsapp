@@ -3,12 +3,14 @@ import { AppError } from '../middleware/error.middleware.js';
 import type {
   SaasConversationMessage,
   SaasConversationMessagesResponse,
+  SaasConversationSummary,
   SaasPairingStartResponse,
   SaasWhatsAppContact,
   SaasWhatsAppInstance,
   SaasWhatsAppQrResponse,
   SaasWhatsAppStatusResponse,
 } from '../types/saas-whatsapp.js';
+import { listStoredConversations } from './conversation-store.js';
 
 function ensureApiKey(): void {
   if (!env.SAAS_WHATSAPP_API_KEY) {
@@ -38,8 +40,15 @@ async function saasRequest<T>(
 
   let response: Response;
   try {
-    response = await fetch(url, { ...options, headers });
-  } catch {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(15000),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'TimeoutError') {
+      throw new AppError(504, 'Tempo esgotado ao contactar o serviço WhatsApp.');
+    }
     throw new AppError(502, 'Não foi possível contactar o serviço WhatsApp.');
   }
 
@@ -115,6 +124,13 @@ export async function getContacts(instanceId: string): Promise<SaasWhatsAppConta
   );
   if (Array.isArray(data)) return data;
   return data.items ?? [];
+}
+
+export async function getConversations(
+  _instanceId: string,
+  options: { limit?: number } = {},
+): Promise<SaasConversationSummary[]> {
+  return listStoredConversations(options.limit ?? 200);
 }
 
 export async function getConversationMessages(

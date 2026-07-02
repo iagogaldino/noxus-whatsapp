@@ -35,6 +35,7 @@ export async function authRequest<T>(path: string, options: RequestInit = {}): P
       Authorization: `Bearer ${token}`,
       ...options.headers,
     },
+    signal: AbortSignal.timeout(20000),
   });
 
   if (!response.ok) {

@@ -9,6 +9,7 @@ whatsappRoutes.use(authMiddleware);
 
 // Chat routes (any authenticated user)
 whatsappRoutes.get('/status', whatsappController.getConnectionStatus);
+whatsappRoutes.get('/conversations', whatsappController.listConversations);
 whatsappRoutes.get('/contacts', whatsappController.getContacts);
 whatsappRoutes.get('/conversations/:jid/messages', whatsappController.getConversationMessages);
 whatsappRoutes.post('/messages/send', whatsappController.sendMessage);

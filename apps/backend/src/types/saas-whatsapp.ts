@@ -41,6 +41,16 @@ export interface SaasConversationMessagesResponse {
   nextCursor?: string | null;
 }
 
+export interface SaasConversationSummary {
+  chatId: string;
+  participantName: string;
+  lastMessage: SaasConversationMessage;
+}
+
+export interface SaasConversationsResponse {
+  items: SaasConversationSummary[];
+}
+
 export interface SaasIncomingMessageEvent {
   messageId: string;
   from: string;

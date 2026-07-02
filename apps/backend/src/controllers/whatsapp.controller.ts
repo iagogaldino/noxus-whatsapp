@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
+import { upsertConversation } from '../services/conversation-store.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 const sendMessageSchema = z.object({
@@ -98,6 +99,21 @@ export async function getContacts(_req: Request, res: Response, next: NextFuncti
   }
 }
 
+export async function listConversations(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const limit = req.query.limit ? Number(req.query.limit) : 200;
+    const conversations = await saasWhatsApp.getConversations(instanceId, { limit });
+    res.json({ items: conversations });
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getConversationMessages(
   req: Request,
   res: Response,
@@ -112,6 +128,12 @@ export async function getConversationMessages(
       limit,
       beforeMessageId,
     });
+
+    if (messages.items.length > 0) {
+      const lastMessage = messages.items[messages.items.length - 1];
+      upsertConversation(jid, lastMessage, saasWhatsApp.normalizePhone(jid));
+    }
+
     res.json(messages);
   } catch (err) {
     next(err);

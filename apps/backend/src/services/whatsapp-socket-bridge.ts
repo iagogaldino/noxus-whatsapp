@@ -2,6 +2,7 @@ import { io as ioClient, Socket } from 'socket.io-client';
 import { env } from '../config/env.js';
 import type { SaasIncomingMessageEvent, SaasSendMessageAck } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
+import { upsertConversation } from './conversation-store.js';
 
 type MessageListener = (payload: SaasIncomingMessageEvent) => void;
 
@@ -48,6 +49,22 @@ class WhatsAppSocketBridge {
     });
 
     this.saasSocket.on('whatsapp.message.received', (payload: SaasIncomingMessageEvent) => {
+      const chatId = normalizePhone(payload.from || '');
+      if (chatId) {
+        upsertConversation(
+          chatId,
+          {
+            id: payload.messageId,
+            jid: `${chatId}@s.whatsapp.net`,
+            fromMe: false,
+            timestamp: payload.timestamp,
+            text: payload.text,
+            type: 'conversation',
+          },
+          payload.to ?? chatId,
+        );
+      }
+
       for (const listener of this.messageListeners) {
         listener(payload);
       }

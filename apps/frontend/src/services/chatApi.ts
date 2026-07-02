@@ -22,6 +22,16 @@ export interface ConversationMessagesResponse {
   nextCursor?: string | null;
 }
 
+export interface ConversationSummary {
+  chatId: string;
+  participantName: string;
+  lastMessage: ConversationMessagesResponse['items'][number];
+}
+
+export interface ConversationsResponse {
+  items: ConversationSummary[];
+}
+
 function normalizePhone(jidOrPhone: string): string {
   const base = jidOrPhone.split('@')[0] ?? jidOrPhone;
   return base.replace(/\D/g, '');
@@ -45,6 +55,10 @@ export function mapApiMessageToChat(
 
 export async function fetchContacts(): Promise<WhatsAppContact[]> {
   return authRequest<WhatsAppContact[]>('/api/v1/whatsapp/contacts');
+}
+
+export async function fetchConversations(limit = 200): Promise<ConversationsResponse> {
+  return authRequest<ConversationsResponse>(`/api/v1/whatsapp/conversations?limit=${limit}`);
 }
 
 export async function fetchConversationMessages(

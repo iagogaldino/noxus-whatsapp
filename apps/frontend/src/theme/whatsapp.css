@@ -26,6 +26,8 @@ ion-app {
   ion-split-pane.wa-split-pane.split-pane-visible {
     display: flex;
     flex-direction: row;
+    min-height: 100%;
+    height: 100%;
   }
 
   ion-split-pane.wa-split-pane .wa-chat-list--sidebar {
@@ -36,14 +38,37 @@ ion-app {
     max-width: var(--side-max-width);
     min-width: var(--side-min-width);
     height: 100%;
+    min-height: 100%;
+    align-self: stretch;
     background: var(--wa-list-bg);
     border-right: 1px solid var(--wa-border);
     overflow: hidden;
+    position: relative;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-header {
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
   }
 
   ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     --background: var(--wa-list-bg);
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(background) {
+    background: var(--wa-list-bg);
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll) {
+    min-height: 100%;
+  }
+
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-empty-state {
+    min-height: 100%;
+    background: var(--wa-list-bg);
   }
 
   ion-split-pane.wa-split-pane .wa-chat-list--sidebar ion-content.wa-sidebar-content::part(scroll) {

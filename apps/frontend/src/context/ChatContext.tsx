@@ -14,8 +14,8 @@ import {
   resolveMessageType,
 } from '../utils/message';
 import {
-  fetchContacts,
   fetchConversationMessages,
+  fetchConversations,
   mapApiMessageToChat,
   normalizePhone,
   sendMessageRest,
@@ -176,31 +176,40 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!session) return;
 
     try {
-      const contacts = await fetchContacts();
-      const convs: Conversation[] = contacts.map((contact) => {
-        const chatId = normalizePhone(contact.phone ?? contact.jid ?? contact.id);
-        const name = contact.notify ?? contact.phone ?? chatId;
+      const { items } = await fetchConversations();
+      const convs: Conversation[] = items.map((item) => {
+        const lastMessage = mapApiMessageToChat(item.lastMessage, currentUser.id);
         return {
-          id: chatId,
+          id: item.chatId,
           participant: {
-            id: chatId,
-            name,
-            avatarColor: pickAvatarColor(chatId),
+            id: item.chatId,
+            name: item.participantName,
+            avatarColor: pickAvatarColor(item.chatId),
           },
-          lastMessage: buildPlaceholderMessage(chatId, 'Sem mensagens'),
+          lastMessage,
           unreadCount: 0,
         };
       });
 
-      setConversations(
-        convs.sort((a, b) => b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime()),
-      );
+      setConversations(convs);
+      setMessagesByChat((prev) => {
+        const next = { ...prev };
+        for (const item of items) {
+          const message = mapApiMessageToChat(item.lastMessage, currentUser.id);
+          const existing = next[item.chatId] ?? [];
+          if (!existing.some((m) => m.id === message.id)) {
+            next[item.chatId] = [...existing, message];
+          }
+        }
+        return next;
+      });
       setError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Erro ao carregar conversas.';
       setError(message);
+      setConversations([]);
     }
-  }, [session]);
+  }, [session, currentUser.id]);
 
   useEffect(() => {
     if (!session) {
@@ -293,16 +302,29 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }));
 
           const lastMessage = messages[messages.length - 1];
-          setConversations((prev) =>
-            prev
-              .map((conv) =>
-                conv.id === chatId ? { ...conv, lastMessage } : conv,
-              )
-              .sort(
-                (a, b) =>
-                  b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
-              ),
-          );
+          setConversations((prev) => {
+            const existing = prev.find((c) => c.id === chatId);
+            const participant: User = existing?.participant ?? {
+              id: chatId,
+              name: chatId,
+              avatarColor: pickAvatarColor(chatId),
+            };
+
+            const updated: Conversation = {
+              id: chatId,
+              participant,
+              lastMessage,
+              unreadCount: existing?.unreadCount ?? 0,
+            };
+
+            const others = prev.filter((c) => c.id !== chatId);
+            return [updated, ...others].sort(
+              (a, b) =>
+                b.lastMessage.timestamp.getTime() - a.lastMessage.timestamp.getTime(),
+            );
+          });
+        } else {
+          setConversations((prev) => prev.filter((c) => c.id !== chatId));
         }
 
         loadedChatsRef.current.add(chatId);
