@@ -3,12 +3,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ChatHeader from '../components/ChatHeader';
 import ForwardConversationModal from '../components/ForwardConversationModal';
+import MessageDateDivider from '../components/MessageDateDivider';
 import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import { useChat } from '../context/ChatContext';
 import { resolveRouteChatId } from '../utils/chatRoute';
 import { useAppNavigate } from '../utils/navigation';
+import { buildMessageListItems } from '../utils/message';
 
 const ChatDetail: React.FC = () => {
   const { id: routeId } = useParams<{ id: string }>();
@@ -42,6 +44,7 @@ const ChatDetail: React.FC = () => {
   const messages = chatId
     ? getMessages(chatId).filter((message) => message.chatId === conversation?.id || message.chatId === chatId)
     : [];
+  const messageListItems = buildMessageListItems(messages);
   const showMessageSkeleton =
     Boolean(chatId) && (justSwitchedChat || historyReadyFor !== chatId);
   const lastMessageId = messages[messages.length - 1]?.id;
@@ -180,16 +183,20 @@ const ChatDetail: React.FC = () => {
           <MessageListSkeleton />
         ) : (
           <div key={chatId} className="wa-message-list">
-            {messages.map((message) => (
-              <MessageBubble
-                key={message.id}
-                message={message}
-                isSent={message.senderId === currentUser.id}
-                showSenderName={
-                  Boolean(conversation.isGroup) && message.senderId !== currentUser.id
-                }
-              />
-            ))}
+            {messageListItems.map((item) =>
+              item.type === 'date' ? (
+                <MessageDateDivider key={item.key} label={item.label} />
+              ) : (
+                <MessageBubble
+                  key={item.key}
+                  message={item.message}
+                  isSent={item.message.senderId === currentUser.id}
+                  showSenderName={
+                    Boolean(conversation.isGroup) && item.message.senderId !== currentUser.id
+                  }
+                />
+              ),
+            )}
           </div>
         )}
       </IonContent>

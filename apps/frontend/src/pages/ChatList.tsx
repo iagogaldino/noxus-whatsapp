@@ -146,7 +146,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
             <p>Nenhuma conversa encontrada.</p>
           </div>
         ) : (
-          <IonList lines="none">
+          <div className="wa-chat-list-items">
             {filteredConversations.map((conversation) => (
               <ChatListItem
                 key={conversation.id}
@@ -155,7 +155,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
                 onClick={() => openChat(conversation.id)}
               />
             ))}
-          </IonList>
+          </div>
         )}
       </IonContent>
     </>

@@ -1,4 +1,5 @@
 import { Message, MessageType } from '../types/chat';
+import { formatMessageDateLabel, toDayKey } from './format';
 import { stripWhatsAppFormatting } from './whatsappText';
 
 export function isAudioMimeType(mimeType: string, fileName = ''): boolean {
@@ -86,4 +87,28 @@ export function extractMediaFileName(
 
   if (text.startsWith('📎 ')) return text.slice(2).trim();
   return undefined;
+}
+
+export type MessageListItem =
+  | { type: 'date'; key: string; label: string }
+  | { type: 'message'; key: string; message: Message };
+
+export function buildMessageListItems(messages: Message[]): MessageListItem[] {
+  const items: MessageListItem[] = [];
+  let lastDayKey = '';
+
+  for (const message of messages) {
+    const dayKey = toDayKey(message.timestamp);
+    if (dayKey !== lastDayKey) {
+      items.push({
+        type: 'date',
+        key: `date-${dayKey}`,
+        label: formatMessageDateLabel(message.timestamp),
+      });
+      lastDayKey = dayKey;
+    }
+    items.push({ type: 'message', key: message.id, message });
+  }
+
+  return items;
 }

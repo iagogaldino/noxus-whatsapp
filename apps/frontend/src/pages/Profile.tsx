@@ -67,7 +67,6 @@ const Profile: React.FC = () => {
         <div className="wa-profile-header">
           <Avatar user={currentUser} size="large" />
           <h2 className="wa-profile-name">{currentUser.name}</h2>
-          <p className="wa-profile-status">{currentUser.status}</p>
         </div>
         <IonList>
           {menuItems.map((item) => (

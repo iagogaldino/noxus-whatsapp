@@ -118,7 +118,6 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: session?.userId ?? 'me',
       name: session?.name ?? 'Usuário',
       avatarColor: '#128C7E',
-      status: 'Disponível',
     }),
     [session],
   );

@@ -90,9 +90,8 @@ ion-app {
     border-radius: 4px;
   }
 
-  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-chat-item {
-    --padding-end: 8px;
-    --inner-padding-end: 4px;
+  ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-chat-list-items {
+    padding-inline: 4px;
   }
 
   ion-split-pane.wa-split-pane .wa-chat-list--sidebar .wa-chat-item__time,
@@ -381,18 +380,55 @@ ion-content.wa-home-bg::part(background) {
   object-fit: cover;
 }
 
+.wa-chat-list-items {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 8px;
+}
+
 .wa-chat-item {
-  --padding-start: 12px;
-  --padding-end: 12px;
-  --inner-padding-end: 0;
-  --background: var(--wa-list-bg);
-  --background-hover: var(--wa-hover);
-  --background-activated: var(--wa-active-chat);
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-height: 72px;
+  padding: 0 13px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.wa-chat-item:hover {
+  background: var(--wa-hover);
 }
 
 .wa-chat-item--active {
-  --background: var(--wa-active-chat);
+  background: var(--wa-active-chat);
+  border-radius: 8px;
+}
+
+.wa-chat-item__avatar {
+  flex-shrink: 0;
+  border-radius: 50%;
+  transition: box-shadow 0.15s ease;
+}
+
+.wa-chat-item__avatar--active {
+  box-shadow:
+    0 0 0 2px var(--wa-list-bg),
+    0 0 0 3px var(--wa-teal);
+}
+
+.wa-chat-item--active .wa-chat-item__avatar--active {
+  box-shadow:
+    0 0 0 2px var(--wa-active-chat),
+    0 0 0 3px var(--wa-teal);
 }
 
 .wa-chat-item__content {
@@ -400,27 +436,29 @@ ion-content.wa-home-bg::part(background) {
   flex-direction: column;
   flex: 1;
   min-width: 0;
-  margin-left: 12px;
+  gap: 3px;
+  padding: 10px 0;
 }
 
-.wa-chat-item__row {
+.wa-chat-item__header,
+.wa-chat-item__footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .wa-chat-item__name {
+  flex: 1;
+  min-width: 0;
   font-size: 1rem;
   font-weight: 500;
+  line-height: 1.35;
   color: var(--wa-text-primary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
 }
 
 .wa-group-badge {
@@ -439,32 +477,42 @@ ion-content.wa-home-bg::part(background) {
 .wa-sector-badge {
   display: inline-flex;
   align-items: center;
-  max-width: 42%;
-  padding: 2px 6px;
+  max-width: 72px;
+  padding: 1px 6px;
   border-radius: 4px;
   background: rgba(7, 94, 84, 0.1);
   color: var(--wa-primary);
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  flex-shrink: 1;
-}
-
-.wa-chat-item__time {
-  font-size: 0.75rem;
-  color: var(--wa-text-secondary);
   flex-shrink: 0;
 }
 
+.wa-chat-item__time {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  line-height: 1.2;
+  color: var(--wa-text-secondary);
+}
+
+.wa-chat-item__time--unread {
+  color: var(--wa-teal);
+  font-weight: 500;
+}
+
 .wa-chat-item__preview {
-  font-size: 0.85rem;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+  line-height: 1.35;
   color: var(--wa-text-secondary);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  margin-top: 2px;
 }
 
 .wa-chat-item__preview--unread {
@@ -472,19 +520,45 @@ ion-content.wa-home-bg::part(background) {
   font-weight: 500;
 }
 
+.wa-chat-item__ticks {
+  flex-shrink: 0;
+  font-size: 1rem;
+  margin-right: 3px;
+  color: var(--wa-text-secondary);
+  vertical-align: middle;
+}
+
+.wa-chat-item__ticks--read {
+  color: #53bdeb;
+}
+
+.wa-chat-item__you {
+  flex-shrink: 0;
+}
+
+.wa-chat-item__meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
 .wa-unread-badge {
   background: var(--wa-unread-badge);
   color: white;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 600;
   min-width: 20px;
   height: 20px;
   border-radius: 10px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 6px;
   flex-shrink: 0;
+  line-height: 1;
 }
 
 .wa-message-list {
@@ -492,6 +566,23 @@ ion-content.wa-home-bg::part(background) {
   flex-direction: column;
   gap: 4px;
   padding: 8px 12px 16px 16px;
+}
+
+.wa-date-divider {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 4px;
+}
+
+.wa-date-divider__label {
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--wa-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.2;
+  padding: 5px 12px 6px;
+  border-radius: 8px;
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.13);
 }
 
 .wa-message-row {

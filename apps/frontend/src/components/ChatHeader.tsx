@@ -44,7 +44,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, isGroup, onForw
           <Avatar user={user} size="medium" />
           <div className="wa-chat-header__info">
             <div className="wa-chat-header__name">{user.name}</div>
-            <div className="wa-chat-header__status">{isGroup ? 'Grupo' : (user.status ?? 'online')}</div>
+            {isGroup && <div className="wa-chat-header__status">Grupo</div>}
           </div>
         </div>
         <IonTitle style={{ display: 'none' }}>{user.name}</IonTitle>
