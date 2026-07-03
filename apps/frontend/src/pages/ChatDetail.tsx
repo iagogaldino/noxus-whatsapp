@@ -1,4 +1,4 @@
-import { IonContent, IonFooter, IonPage } from '@ionic/react';
+import { IonAlert, IonContent, IonFooter, IonPage } from '@ionic/react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import ChatHeader from '../components/ChatHeader';
@@ -7,9 +7,11 @@ import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import { useChat } from '../context/ChatContext';
+import { useAppNavigate } from '../utils/navigation';
 
 const ChatDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { replace } = useAppNavigate();
   const contentRef = useRef<HTMLIonContentElement>(null);
   const prevChatIdRef = useRef(id);
   const {
@@ -21,10 +23,12 @@ const ChatDetail: React.FC = () => {
     loadChatHistory,
     isChatHistoryLoaded,
     forwardConversation,
+    deleteConversation,
     currentUser,
   } = useChat();
 
   const [forwardModalOpen, setForwardModalOpen] = useState(false);
+  const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
   const [historyReadyFor, setHistoryReadyFor] = useState<string | undefined>(id);
 
   const justSwitchedChat = prevChatIdRef.current !== id;
@@ -69,6 +73,19 @@ const ChatDetail: React.FC = () => {
       }
     };
   }, [scrollToBottom]);
+
+  const handleDelete = useCallback(async () => {
+    if (!id) return;
+
+    const result = await deleteConversation(id);
+    if (result.success) {
+      setDeleteAlertOpen(false);
+      replace('/');
+      return;
+    }
+
+    window.alert(result.error ?? 'Falha ao remover conversa.');
+  }, [deleteConversation, id, replace]);
 
   useEffect(() => {
     if (!id) return;
@@ -118,6 +135,7 @@ const ChatDetail: React.FC = () => {
         isGroup={conversation.isGroup}
         showBack
         onForward={() => setForwardModalOpen(true)}
+        onDelete={() => setDeleteAlertOpen(true)}
       />
       <IonContent ref={contentRef} className="wa-chat-bg">
         {showMessageSkeleton ? (
@@ -150,6 +168,17 @@ const ChatDetail: React.FC = () => {
         currentSectorId={conversation.assignedSector?.id ?? null}
         onClose={() => setForwardModalOpen(false)}
         onSelectSector={(sectorId) => forwardConversation(id, sectorId)}
+      />
+
+      <IonAlert
+        isOpen={deleteAlertOpen}
+        onDidDismiss={() => setDeleteAlertOpen(false)}
+        header="Remover conversa"
+        message={`Deseja remover a conversa com ${conversation.participant.name}? O histórico local será apagado.`}
+        buttons={[
+          { text: 'Cancelar', role: 'cancel' },
+          { text: 'Remover', role: 'destructive', handler: () => void handleDelete() },
+        ]}
       />
     </IonPage>
   );

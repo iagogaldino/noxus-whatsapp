@@ -14,6 +14,7 @@ import {
   resolveMessageType,
 } from '../utils/message';
 import {
+  deleteConversation as deleteConversationApi,
   fetchConversationMessages,
   fetchConversations,
   forwardConversation as forwardConversationApi,
@@ -89,6 +90,7 @@ interface ChatContextValue {
   sendAttachment: (chatId: string, file: File, caption?: string) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
   forwardConversation: (chatId: string, sectorId: string) => Promise<{ success: boolean; error?: string }>;
+  deleteConversation: (chatId: string) => Promise<{ success: boolean; error?: string }>;
   refreshConversations: () => Promise<void>;
 }
 
@@ -696,6 +698,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [refreshConversations],
   );
 
+  const deleteConversation = useCallback(async (chatId: string) => {
+    try {
+      await deleteConversationApi(chatId);
+
+      setConversations((prev) => prev.filter((conv) => conv.id !== chatId));
+      setMessagesByChat((prev) => {
+        const next = { ...prev };
+        delete next[chatId];
+        return next;
+      });
+      loadedChatsRef.current.delete(chatId);
+      draftChatIdsRef.current.delete(chatId);
+
+      return { success: true };
+    } catch (err) {
+      return {
+        success: false,
+        error: err instanceof Error ? err.message : 'Falha ao remover conversa.',
+      };
+    }
+  }, []);
+
   const value = useMemo(
     () => ({
       currentUser,
@@ -715,6 +739,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendAttachment,
       markAsRead,
       forwardConversation,
+      deleteConversation,
       refreshConversations,
     }),
     [
@@ -734,6 +759,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       sendAttachment,
       markAsRead,
       forwardConversation,
+      deleteConversation,
       refreshConversations,
     ],
   );

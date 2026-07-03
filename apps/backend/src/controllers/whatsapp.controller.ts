@@ -191,6 +191,22 @@ export async function forwardConversation(
   }
 }
 
+export async function deleteConversation(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const instanceId = await saasWhatsApp.resolveInstanceId();
+    const viewer = await getConversationViewer(req.auth!.userId);
+    await chatPersistence.assertConversationAccess(instanceId, req.params.chatId, viewer);
+    const result = await chatPersistence.deleteConversation(instanceId, req.params.chatId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function getConversationMessages(
   req: Request,
   res: Response,

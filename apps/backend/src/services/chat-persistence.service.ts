@@ -11,7 +11,7 @@ import type {
   SaasIncomingMessageEvent,
 } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
-import { saveIncomingMedia } from './chat-media-gridfs.service.js';
+import { saveIncomingMedia, deleteMedia } from './chat-media-gridfs.service.js';
 import { assertMediaSize, parseFileBuffer } from '../utils/parse-file-buffer.js';
 
 export function slugifyContactName(name: string): string {
@@ -502,6 +502,54 @@ export async function forwardConversation(
       name: assignedSectorDoc.name,
     },
     assignedAt: assignedAt.toISOString(),
+  };
+}
+
+export interface DeleteConversationResult {
+  deletedMessages: number;
+  deletedMediaFiles: number;
+}
+
+export async function deleteConversation(
+  instanceId: string,
+  chatId: string,
+): Promise<DeleteConversationResult> {
+  const normalizedChatId = normalizeChatId(chatId);
+
+  const existing = await ChatConversation.findOne({ instanceId, chatId: normalizedChatId }).lean();
+  if (!existing) {
+    throw new AppError(404, 'Conversa não encontrada.');
+  }
+
+  const messagesWithMedia = await ChatMessage.find({
+    instanceId,
+    chatId: normalizedChatId,
+    mediaGridFsId: { $exists: true, $ne: null },
+  })
+    .select('mediaGridFsId')
+    .lean();
+
+  let deletedMediaFiles = 0;
+  for (const message of messagesWithMedia) {
+    if (!message.mediaGridFsId) continue;
+    try {
+      await deleteMedia(message.mediaGridFsId);
+      deletedMediaFiles += 1;
+    } catch {
+      // Ignora falhas pontuais ao apagar mídia.
+    }
+  }
+
+  const deleteResult = await ChatMessage.deleteMany({
+    instanceId,
+    chatId: normalizedChatId,
+  });
+
+  await ChatConversation.deleteOne({ instanceId, chatId: normalizedChatId });
+
+  return {
+    deletedMessages: deleteResult.deletedCount ?? 0,
+    deletedMediaFiles,
   };
 }
 

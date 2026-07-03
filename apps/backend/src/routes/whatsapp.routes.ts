@@ -12,6 +12,7 @@ whatsappRoutes.use(authMiddleware);
 whatsappRoutes.get('/status', whatsappController.getConnectionStatus);
 whatsappRoutes.get('/conversations', whatsappController.listConversations);
 whatsappRoutes.patch('/conversations/:chatId/forward', whatsappController.forwardConversation);
+whatsappRoutes.delete('/conversations/:chatId', whatsappController.deleteConversation);
 whatsappRoutes.get('/contacts', whatsappController.getContacts);
 whatsappRoutes.get('/contacts/:jid/profile-photo', whatsappController.getContactProfilePhoto);
 whatsappRoutes.get('/conversations/:jid/messages', whatsappController.getConversationMessages);

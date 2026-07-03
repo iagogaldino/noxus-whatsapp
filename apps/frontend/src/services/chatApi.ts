@@ -175,6 +175,15 @@ export async function forwardConversation(
   });
 }
 
+export async function deleteConversation(chatId: string): Promise<{
+  deletedMessages: number;
+  deletedMediaFiles: number;
+}> {
+  return authRequest(`/api/v1/whatsapp/conversations/${encodeURIComponent(chatId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function fetchConversationMessages(
   jid: string,
   options: { limit?: number; beforeMessageId?: string } = {},

@@ -12,7 +12,7 @@ import {
   IonTitle,
   IonToolbar,
 } from '@ionic/react';
-import { ellipsisVertical, shareOutline } from 'ionicons/icons';
+import { ellipsisVertical, shareOutline, trashOutline } from 'ionicons/icons';
 import { useState } from 'react';
 import { User } from '../types/chat';
 import Avatar from './Avatar';
@@ -22,9 +22,10 @@ interface ChatHeaderProps {
   showBack?: boolean;
   isGroup?: boolean;
   onForward?: () => void;
+  onDelete?: () => void;
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, isGroup, onForward }) => {
+const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, isGroup, onForward, onDelete }) => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [popoverEvent, setPopoverEvent] = useState<Event | undefined>();
 
@@ -72,6 +73,18 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, isGroup, onForw
             >
               <IonIcon icon={shareOutline} slot="start" />
               <IonLabel>Encaminhar para setor</IonLabel>
+            </IonItem>
+            <IonItem
+              button
+              detail={false}
+              className="wa-chat-menu__danger"
+              onClick={() => {
+                setPopoverOpen(false);
+                onDelete?.();
+              }}
+            >
+              <IonIcon icon={trashOutline} slot="start" color="danger" />
+              <IonLabel color="danger">Remover conversa</IonLabel>
             </IonItem>
           </IonList>
         </IonContent>
