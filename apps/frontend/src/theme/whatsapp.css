@@ -109,6 +109,7 @@ ion-app {
     left: auto !important;
     right: auto !important;
     width: auto !important;
+    background: #f0f2f5;
   }
 
   ion-split-pane.wa-split-pane ion-router-outlet .ion-page {
@@ -213,10 +214,19 @@ ion-content.wa-chat-bg::part(scroll)::-webkit-scrollbar-corner {
   align-items: center;
   justify-content: center;
   height: 100%;
+  min-height: 100%;
   background: #f0f2f5;
   color: var(--wa-text-secondary);
   text-align: center;
   padding: 2rem;
+}
+
+ion-content.wa-home-bg {
+  --background: #f0f2f5;
+}
+
+ion-content.wa-home-bg::part(background) {
+  background: #f0f2f5;
 }
 
 .wa-empty-state ion-icon {

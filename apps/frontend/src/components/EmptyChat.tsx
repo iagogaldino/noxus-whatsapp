@@ -1,13 +1,9 @@
 import { IonContent, IonIcon, IonPage } from '@ionic/react';
 import { chatbubblesOutline } from 'ionicons/icons';
 
-interface EmptyChatProps {
-  desktopOnly?: boolean;
-}
-
-const EmptyChat: React.FC<EmptyChatProps> = ({ desktopOnly = false }) => (
-  <IonPage className={desktopOnly ? 'ion-hide-md-down' : ''}>
-    <IonContent>
+const EmptyChat: React.FC = () => (
+  <IonPage>
+    <IonContent className="wa-home-bg">
       <div className="wa-empty-state">
         <IonIcon icon={chatbubblesOutline} />
         <h2>Noxustalk</h2>

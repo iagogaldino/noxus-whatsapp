@@ -27,6 +27,7 @@ import {
 } from '../services/chatApi';
 import { chatSocket, ChatMessageReceivedEvent, ChatMessageSentEvent } from '../services/chatSocket';
 import { useAuth } from './AuthContext';
+import { resolveRouteChatId, sameChatId } from '../utils/chatRoute';
 
 const MAX_ATTACHMENT_SIZE_BYTES = 16 * 1024 * 1024;
 
@@ -386,12 +387,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [conversations, searchQuery]);
 
   const getMessages = useCallback(
-    (chatId: string) => messagesByChat[chatId] ?? [],
+    (chatId: string) => {
+      const normalizedId = resolveRouteChatId(chatId) ?? chatId;
+      if (messagesByChat[normalizedId]) return messagesByChat[normalizedId];
+      const matched = Object.keys(messagesByChat).find((key) => sameChatId(key, chatId));
+      return matched ? messagesByChat[matched] : [];
+    },
     [messagesByChat],
   );
 
   const getConversation = useCallback(
-    (chatId: string) => conversations.find((c) => c.id === chatId),
+    (chatId: string) => conversations.find((c) => sameChatId(c.id, chatId)),
     [conversations],
   );
 
@@ -488,8 +494,12 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             [chatId]: [],
           }));
 
-          if (!draftChatIdsRef.current.has(chatId)) {
-            setConversations((prev) => prev.filter((c) => c.id !== chatId));
+          const existing = conversationsRef.current.find((c) => sameChatId(c.id, chatId));
+          const isPlaceholder =
+            existing?.lastMessage.id === `${existing?.id ?? chatId}-placeholder`;
+
+          if (isPlaceholder && !draftChatIdsRef.current.has(chatId)) {
+            setConversations((prev) => prev.filter((c) => !sameChatId(c.id, chatId)));
           }
         }
 
@@ -673,7 +683,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const markAsRead = useCallback((chatId: string) => {
     setConversations((prev) =>
-      prev.map((conv) => (conv.id === chatId ? { ...conv, unreadCount: 0 } : conv)),
+      prev.map((conv) => (sameChatId(conv.id, chatId) ? { ...conv, unreadCount: 0 } : conv)),
     );
   }, []);
 

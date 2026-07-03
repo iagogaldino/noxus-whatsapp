@@ -10,6 +10,7 @@ import ChatDetail from './pages/ChatDetail';
 import ChatList from './pages/ChatList';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
+import { useIsDesktop } from './hooks/useIsDesktop';
 
 import '@ionic/react/css/core.css';
 import '@ionic/react/css/normalize.css';
@@ -29,12 +30,10 @@ import './admin/theme/admin.css';
 
 setupIonicReact();
 
-const HomeRoute: React.FC = () => (
-  <>
-    <ChatList mobileOnly />
-    <EmptyChat desktopOnly />
-  </>
-);
+const HomeRoute: React.FC = () => {
+  const isDesktop = useIsDesktop();
+  return isDesktop ? <EmptyChat /> : <ChatList />;
+};
 
 const WhatsAppApp: React.FC = () => (
   <PrivateRoute>

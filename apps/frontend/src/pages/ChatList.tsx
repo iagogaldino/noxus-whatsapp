@@ -26,6 +26,7 @@ import SearchBar from '../components/SearchBar';
 import { useAuth } from '../context/AuthContext';
 import { useChat } from '../context/ChatContext';
 import { useAppNavigate } from '../utils/navigation';
+import { resolveRouteChatId } from '../utils/chatRoute';
 
 interface ChatListProps {
   /** Lista fixa no painel lateral (desktop) */
@@ -45,7 +46,7 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
 
   const activeChatId = location.pathname.startsWith('/chat/')
-    ? decodeURIComponent(location.pathname.split('/chat/')[1] ?? '')
+    ? resolveRouteChatId(location.pathname.split('/chat/')[1])
     : undefined;
 
   const openChat = (chatId: string) => {

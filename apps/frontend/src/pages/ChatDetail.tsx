@@ -7,13 +7,15 @@ import MessageBubble from '../components/MessageBubble';
 import MessageInput from '../components/MessageInput';
 import MessageListSkeleton from '../components/MessageListSkeleton';
 import { useChat } from '../context/ChatContext';
+import { resolveRouteChatId } from '../utils/chatRoute';
 import { useAppNavigate } from '../utils/navigation';
 
 const ChatDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id: routeId } = useParams<{ id: string }>();
+  const chatId = resolveRouteChatId(routeId);
   const { replace } = useAppNavigate();
   const contentRef = useRef<HTMLIonContentElement>(null);
-  const prevChatIdRef = useRef(id);
+  const prevChatIdRef = useRef(chatId);
   const {
     getConversation,
     getMessages,
@@ -29,20 +31,21 @@ const ChatDetail: React.FC = () => {
 
   const [forwardModalOpen, setForwardModalOpen] = useState(false);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
-  const [historyReadyFor, setHistoryReadyFor] = useState<string | undefined>(id);
+  const [historyReadyFor, setHistoryReadyFor] = useState<string | undefined>(chatId);
 
-  const justSwitchedChat = prevChatIdRef.current !== id;
+  const justSwitchedChat = prevChatIdRef.current !== chatId;
   if (justSwitchedChat) {
-    prevChatIdRef.current = id;
+    prevChatIdRef.current = chatId;
   }
 
-  const conversation = id ? getConversation(id) : undefined;
-  const messages = id
-    ? getMessages(id).filter((message) => message.chatId === id)
+  const conversation = chatId ? getConversation(chatId) : undefined;
+  const messages = chatId
+    ? getMessages(chatId).filter((message) => message.chatId === conversation?.id || message.chatId === chatId)
     : [];
   const showMessageSkeleton =
-    Boolean(id) && (justSwitchedChat || historyReadyFor !== id);
+    Boolean(chatId) && (justSwitchedChat || historyReadyFor !== chatId);
   const lastMessageId = messages[messages.length - 1]?.id;
+  const resolvedChatId = conversation?.id ?? chatId;
 
   const scrollToBottom = useCallback(async () => {
     const content = contentRef.current;
@@ -75,32 +78,32 @@ const ChatDetail: React.FC = () => {
   }, [scrollToBottom]);
 
   const handleDelete = useCallback(async () => {
-    if (!id) return;
+    if (!resolvedChatId) return;
 
-    const result = await deleteConversation(id);
-    if (result.success) {
-      setDeleteAlertOpen(false);
-      replace('/');
+    const result = await deleteConversation(resolvedChatId);
+    if (!result.success) {
+      window.alert(result.error ?? 'Falha ao remover conversa.');
       return;
     }
 
-    window.alert(result.error ?? 'Falha ao remover conversa.');
-  }, [deleteConversation, id, replace]);
+    setDeleteAlertOpen(false);
+    replace('/');
+  }, [deleteConversation, replace, resolvedChatId]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!chatId) return;
 
     let cancelled = false;
-    markAsRead(id);
+    markAsRead(chatId);
 
-    if (isChatHistoryLoaded(id)) {
-      setHistoryReadyFor(id);
+    if (isChatHistoryLoaded(chatId)) {
+      setHistoryReadyFor(chatId);
       return scrollToBottomWithRetries();
     }
 
-    void loadChatHistory(id).finally(() => {
+    void loadChatHistory(chatId).finally(() => {
       if (!cancelled) {
-        setHistoryReadyFor(id);
+        setHistoryReadyFor(chatId);
         scrollToBottomWithRetries();
       }
     });
@@ -108,15 +111,32 @@ const ChatDetail: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [id, markAsRead, loadChatHistory, isChatHistoryLoaded, scrollToBottomWithRetries]);
+  }, [chatId, markAsRead, loadChatHistory, isChatHistoryLoaded, scrollToBottomWithRetries]);
 
   useEffect(() => {
-    if (!id || !conversation || showMessageSkeleton) return;
+    if (!chatId || !conversation || showMessageSkeleton) return;
 
     return scrollToBottomWithRetries();
-  }, [id, conversation, showMessageSkeleton, messages.length, lastMessageId, scrollToBottomWithRetries]);
+  }, [chatId, conversation, showMessageSkeleton, messages.length, lastMessageId, scrollToBottomWithRetries]);
 
-  if (!id || !conversation) {
+  const deleteAlert = (
+    <IonAlert
+      isOpen={deleteAlertOpen}
+      onDidDismiss={() => setDeleteAlertOpen(false)}
+      header="Remover conversa"
+      message={
+        conversation
+          ? `Deseja remover a conversa com ${conversation.participant.name}? O histórico local será apagado.`
+          : 'Deseja remover esta conversa? O histórico local será apagado.'
+      }
+      buttons={[
+        { text: 'Cancelar', role: 'cancel' },
+        { text: 'Remover', role: 'destructive', handler: () => void handleDelete() },
+      ]}
+    />
+  );
+
+  if (!chatId) {
     return (
       <IonPage>
         <IonContent>
@@ -128,8 +148,26 @@ const ChatDetail: React.FC = () => {
     );
   }
 
+  if (!conversation) {
+    return (
+      <IonPage>
+        <ChatHeader
+          user={{ id: chatId, name: chatId }}
+          showBack
+          onDelete={() => setDeleteAlertOpen(true)}
+        />
+        <IonContent>
+          <div className="wa-empty-state">
+            <p>Conversa não encontrada.</p>
+          </div>
+        </IonContent>
+        {deleteAlert}
+      </IonPage>
+    );
+  }
+
   return (
-    <IonPage key={id}>
+    <IonPage key={chatId}>
       <ChatHeader
         user={conversation.participant}
         isGroup={conversation.isGroup}
@@ -141,7 +179,7 @@ const ChatDetail: React.FC = () => {
         {showMessageSkeleton ? (
           <MessageListSkeleton />
         ) : (
-          <div key={id} className="wa-message-list">
+          <div key={chatId} className="wa-message-list">
             {messages.map((message) => (
               <MessageBubble
                 key={message.id}
@@ -157,8 +195,8 @@ const ChatDetail: React.FC = () => {
       </IonContent>
       <IonFooter className="wa-footer">
         <MessageInput
-          onSend={(text) => void sendMessage(id, text)}
-          onSendAttachment={(file, caption) => void sendAttachment(id, file, caption)}
+          onSend={(text) => void sendMessage(conversation.id, text)}
+          onSendAttachment={(file, caption) => void sendAttachment(conversation.id, file, caption)}
         />
       </IonFooter>
 
@@ -167,19 +205,10 @@ const ChatDetail: React.FC = () => {
         chatName={conversation.participant.name}
         currentSectorId={conversation.assignedSector?.id ?? null}
         onClose={() => setForwardModalOpen(false)}
-        onSelectSector={(sectorId) => forwardConversation(id, sectorId)}
+        onSelectSector={(sectorId) => forwardConversation(conversation.id, sectorId)}
       />
 
-      <IonAlert
-        isOpen={deleteAlertOpen}
-        onDidDismiss={() => setDeleteAlertOpen(false)}
-        header="Remover conversa"
-        message={`Deseja remover a conversa com ${conversation.participant.name}? O histórico local será apagado.`}
-        buttons={[
-          { text: 'Cancelar', role: 'cancel' },
-          { text: 'Remover', role: 'destructive', handler: () => void handleDelete() },
-        ]}
-      />
+      {deleteAlert}
     </IonPage>
   );
 };
