@@ -22,6 +22,7 @@ export interface Message {
   chatId: string;
   text: string;
   senderId: string;
+  senderName?: string;
   timestamp: Date;
   status?: MessageStatus;
   type?: MessageType;
@@ -31,6 +32,7 @@ export interface Message {
 export interface Conversation {
   id: string;
   participant: User;
+  isGroup?: boolean;
   lastMessage: Message;
   unreadCount: number;
   assignedSector?: { id: string; name: string } | null;

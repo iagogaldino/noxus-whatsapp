@@ -26,6 +26,13 @@ export interface SaasWhatsAppContact {
   notify?: string;
 }
 
+export interface SaasIncomingMessageReply {
+  quotedMessageId: string;
+  quotedParticipant: string | null;
+  quotedText: string;
+  quotedType: string;
+}
+
 export interface SaasConversationMessage {
   id: string;
   jid: string;
@@ -33,6 +40,10 @@ export interface SaasConversationMessage {
   timestamp: string;
   text: string;
   type: string;
+  isGroup?: boolean;
+  chatJid?: string;
+  senderJid?: string;
+  senderName?: string;
   mediaUrl?: string;
   mediaMimeType?: string;
   mediaFileName?: string;
@@ -48,6 +59,7 @@ export interface SaasConversationMessagesResponse {
 export interface SaasConversationSummary {
   chatId: string;
   participantName: string;
+  isGroup?: boolean;
   lastMessage: SaasConversationMessage;
   assignedSector?: { id: string; name: string } | null;
 }
@@ -72,6 +84,10 @@ export interface SaasIncomingMessageEvent {
   userId: string;
   instanceId: string;
   jid?: string;
+  isGroup?: boolean;
+  chatJid?: string;
+  senderJid?: string;
+  reply?: SaasIncomingMessageReply;
   media?: SaasIncomingMedia;
 }
 

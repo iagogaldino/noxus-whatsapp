@@ -115,6 +115,7 @@ const ChatDetail: React.FC = () => {
     <IonPage key={id}>
       <ChatHeader
         user={conversation.participant}
+        isGroup={conversation.isGroup}
         showBack
         onForward={() => setForwardModalOpen(true)}
       />
@@ -128,6 +129,9 @@ const ChatDetail: React.FC = () => {
                 key={message.id}
                 message={message}
                 isSent={message.senderId === currentUser.id}
+                showSenderName={
+                  Boolean(conversation.isGroup) && message.senderId !== currentUser.id
+                }
               />
             ))}
           </div>

@@ -11,9 +11,10 @@ import AudioMessageContent from './AudioMessageContent';
 interface MessageBubbleProps {
   message: Message;
   isSent: boolean;
+  showSenderName?: boolean;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent, showSenderName }) => {
   const type = getMessageType(message);
   const attachment = message.attachment;
   const hasCaption =
@@ -26,6 +27,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent }) => {
           type !== 'text' ? 'wa-bubble--media' : ''
         } ${type === 'audio' ? 'wa-bubble--audio' : ''}`}
       >
+        {showSenderName && message.senderName && (
+          <div className="wa-bubble__sender-name">{message.senderName}</div>
+        )}
+
         {type === 'image' && attachment && (
           <ImageMessageContent messageId={message.id} attachment={attachment} />
         )}

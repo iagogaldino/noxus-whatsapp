@@ -12,13 +12,22 @@ interface ChatListItemProps {
   onClick: () => void;
 }
 
+function buildPreview(conversation: Conversation, isSent: boolean, previewText: string): string {
+  if (!previewText) return '';
+  if (isSent) return `Você: ${previewText}`;
+  if (conversation.isGroup && conversation.lastMessage.senderName) {
+    return `${conversation.lastMessage.senderName}: ${previewText}`;
+  }
+  return previewText;
+}
+
 const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onClick }) => {
   const { currentUser } = useChat();
   const { isAdmin } = useAuth();
-  const { participant, lastMessage, unreadCount, assignedSector } = conversation;
+  const { participant, lastMessage, unreadCount, assignedSector, isGroup } = conversation;
   const isSent = lastMessage.senderId === currentUser.id;
   const previewText = getMessagePreview(lastMessage);
-  const preview = previewText ? (isSent ? `Você: ${previewText}` : previewText) : '';
+  const preview = buildPreview(conversation, isSent, previewText);
   const showSectorBadge = isAdmin;
 
   return (
@@ -35,6 +44,7 @@ const ChatListItem: React.FC<ChatListItemProps> = ({ conversation, isActive, onC
           <div className="wa-chat-item__row">
             <span className="wa-chat-item__name">
               {participant.name}
+              {isGroup && <span className="wa-group-badge">Grupo</span>}
               {showSectorBadge && (
                 <span className="wa-sector-badge">
                   {assignedSector?.name ?? 'Geral'}

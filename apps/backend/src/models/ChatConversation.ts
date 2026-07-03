@@ -32,6 +32,14 @@ const chatConversationSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    lastMessageSenderName: {
+      type: String,
+      trim: true,
+    },
+    isGroup: {
+      type: Boolean,
+      default: false,
+    },
     phoneNumber: {
       type: String,
       trim: true,

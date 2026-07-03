@@ -35,6 +35,10 @@ export interface ConversationMessagesResponse {
     timestamp: string;
     text: string;
     type: string;
+    isGroup?: boolean;
+    chatJid?: string;
+    senderJid?: string;
+    senderName?: string;
     mediaUrl?: string;
     mediaMimeType?: string;
     mediaFileName?: string;
@@ -47,6 +51,7 @@ export interface ConversationMessagesResponse {
 export interface ConversationSummary {
   chatId: string;
   participantName: string;
+  isGroup?: boolean;
   lastMessage: ConversationMessagesResponse['items'][number];
   assignedSector?: { id: string; name: string } | null;
 }
@@ -60,6 +65,27 @@ function normalizePhone(jidOrPhone: string): string {
   return base.replace(/\D/g, '');
 }
 
+export function isGroupJid(jid: string): boolean {
+  return jid.endsWith('@g.us');
+}
+
+export function formatGroupDisplayName(chatJid: string): string {
+  const id = chatJid.split('@')[0] ?? chatJid;
+  const suffix = id.length > 6 ? id.slice(-6) : id;
+  return `Grupo · …${suffix}`;
+}
+
+function resolveSenderId(
+  msg: ConversationMessagesResponse['items'][number],
+  conversationChatId: string,
+): string {
+  if (msg.fromMe) return '';
+  const fromSenderJid = normalizePhone(msg.senderJid ?? '');
+  if (fromSenderJid) return fromSenderJid;
+  if (msg.senderJid?.trim()) return msg.senderJid.trim();
+  return normalizePhone(msg.jid) || conversationChatId;
+}
+
 function resolveApiMessageType(
   msg: ConversationMessagesResponse['items'][number],
 ): Message['type'] {
@@ -69,8 +95,10 @@ function resolveApiMessageType(
 export function mapApiMessageToChat(
   msg: ConversationMessagesResponse['items'][number],
   currentUserId: string,
+  options: { chatId: string; isGroup?: boolean } = { chatId: '' },
 ): Message {
-  const chatId = normalizePhone(msg.jid);
+  const chatId = options.chatId || normalizePhone(msg.chatJid ?? msg.jid);
+  const isGroup = options.isGroup ?? msg.isGroup ?? isGroupJid(chatId);
   const type = resolveApiMessageType(msg);
   const fileName =
     extractMediaFileName(msg.text, msg.mediaFileName) ??
@@ -79,12 +107,14 @@ export function mapApiMessageToChat(
   const mediaType: Exclude<MessageType, 'text'> =
     type === 'image' || type === 'audio' || type === 'file' ? type : 'file';
   const text = hasMedia ? normalizeMediaMessageText(msg.text, mediaType, fileName) : msg.text;
+  const senderId = msg.fromMe ? currentUserId : resolveSenderId(msg, chatId);
 
   return {
     id: msg.id,
     chatId,
     text,
-    senderId: msg.fromMe ? currentUserId : chatId,
+    senderId,
+    senderName: msg.senderName,
     timestamp: new Date(msg.timestamp),
     status: msg.fromMe ? 'sent' : 'delivered',
     type,

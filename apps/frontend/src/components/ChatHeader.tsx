@@ -20,10 +20,11 @@ import Avatar from './Avatar';
 interface ChatHeaderProps {
   user: User;
   showBack?: boolean;
+  isGroup?: boolean;
   onForward?: () => void;
 }
 
-const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, onForward }) => {
+const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, isGroup, onForward }) => {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [popoverEvent, setPopoverEvent] = useState<Event | undefined>();
 
@@ -42,7 +43,7 @@ const ChatHeader: React.FC<ChatHeaderProps> = ({ user, showBack, onForward }) =>
           <Avatar user={user} size="medium" />
           <div className="wa-chat-header__info">
             <div className="wa-chat-header__name">{user.name}</div>
-            <div className="wa-chat-header__status">{user.status ?? 'online'}</div>
+            <div className="wa-chat-header__status">{isGroup ? 'Grupo' : (user.status ?? 'online')}</div>
           </div>
         </div>
         <IonTitle style={{ display: 'none' }}>{user.name}</IonTitle>

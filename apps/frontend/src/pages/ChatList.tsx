@@ -45,12 +45,12 @@ const ChatList: React.FC<ChatListProps> = ({ sidebar = false, mobileOnly = false
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
 
   const activeChatId = location.pathname.startsWith('/chat/')
-    ? location.pathname.split('/chat/')[1]
+    ? decodeURIComponent(location.pathname.split('/chat/')[1] ?? '')
     : undefined;
 
   const openChat = (chatId: string) => {
     markAsRead(chatId);
-    history.push(`/chat/${chatId}`);
+    history.push(`/chat/${encodeURIComponent(chatId)}`);
   };
 
   const handleStartConversation = (chatId: string, participantName: string) => {

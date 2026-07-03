@@ -14,6 +14,8 @@ export interface ChatMessageReceivedEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  isGroup?: boolean;
+  senderName?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
   attachment?: {
     name: string;

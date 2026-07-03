@@ -38,9 +38,20 @@ export function sanitizeParticipantName(
   return participantNameFromChatId(chatId) ?? name ?? chatId;
 }
 
-/** Preserva ids `name:*`; telefones são normalizados para dígitos. */
+/** Preserva ids `name:*` e JIDs de grupo `@g.us`; telefones são normalizados para dígitos. */
+export function isGroupJid(jid: string): boolean {
+  return jid.endsWith('@g.us');
+}
+
+export function formatGroupDisplayName(chatJid: string): string {
+  const id = chatJid.split('@')[0] ?? chatJid;
+  const suffix = id.length > 6 ? id.slice(-6) : id;
+  return `Grupo · …${suffix}`;
+}
+
 export function normalizeChatId(chatId: string): string {
   if (chatId.startsWith('name:')) return chatId;
+  if (isGroupJid(chatId)) return chatId;
   return normalizePhone(chatId) || chatId;
 }
 
@@ -52,13 +63,29 @@ export function isValidPhone(phone: string): boolean {
 export function phoneFromChatId(chatId: string): string | null {
   const normalized = normalizeChatId(chatId);
   if (normalized.startsWith('name:')) return null;
+  if (isGroupJid(normalized)) return null;
   const phone = normalizePhone(normalized);
   return isValidPhone(phone) ? phone : null;
 }
 
 function toJid(chatId: string): string {
   if (chatId.startsWith('name:')) return `${chatId}@unknown`;
+  if (isGroupJid(chatId)) return chatId;
   return `${normalizePhone(chatId)}@s.whatsapp.net`;
+}
+
+function resolveSenderId(senderJid?: string, from?: string): string {
+  const fromPhone = normalizePhone(from ?? '');
+  if (fromPhone) return fromPhone;
+  if (senderJid?.trim()) return senderJid.trim();
+  return from?.trim() || 'unknown';
+}
+
+function messageChatIdFromApi(message: SaasConversationMessage): string {
+  if (message.isGroup && message.chatJid) return message.chatJid;
+  if (isGroupJid(message.jid)) return message.jid;
+  if (message.chatJid && isGroupJid(message.chatJid)) return message.chatJid;
+  return normalizePhone(message.chatJid ?? message.jid);
 }
 
 export interface PersistMessageInput {
@@ -76,6 +103,9 @@ export interface PersistMessageInput {
   mediaSize?: number;
   mediaGridFsId?: string;
   participantName?: string;
+  isGroup?: boolean;
+  senderJid?: string;
+  senderName?: string;
 }
 
 function isAudioMedia(mimeType: string, fileName: string): boolean {
@@ -129,7 +159,10 @@ function toSaasMessage(doc: {
   mediaFileName?: string | null;
   mediaSize?: number | null;
   mediaGridFsId?: string | null;
-}): SaasConversationMessage {
+  senderJid?: string | null;
+  senderName?: string | null;
+}, conversationIsGroup?: boolean): SaasConversationMessage {
+  const isGroup = conversationIsGroup ?? isGroupJid(doc.jid);
   return {
     id: doc.externalId,
     jid: doc.jid,
@@ -137,6 +170,10 @@ function toSaasMessage(doc: {
     timestamp: doc.timestamp.toISOString(),
     text: doc.text,
     type: doc.type,
+    isGroup,
+    chatJid: isGroup ? doc.jid : undefined,
+    senderJid: doc.senderJid ?? undefined,
+    senderName: doc.senderName ?? undefined,
     mediaUrl: doc.mediaUrl ?? undefined,
     mediaMimeType: doc.mediaMimeType ?? undefined,
     mediaFileName: doc.mediaFileName ?? undefined,
@@ -148,6 +185,7 @@ function toSaasMessage(doc: {
 export async function saveMessage(input: PersistMessageInput): Promise<void> {
   const chatId = normalizeChatId(input.chatId);
   const jid = input.jid ?? toJid(chatId);
+  const isGroup = input.isGroup ?? isGroupJid(chatId);
   const timestamp = new Date(input.timestamp);
   const type = input.type ?? 'conversation';
 
@@ -189,6 +227,8 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
       mediaFileName,
       mediaSize,
       mediaGridFsId,
+      ...(input.senderJid ? { senderJid: input.senderJid } : {}),
+      ...(input.senderName ? { senderName: input.senderName } : {}),
     },
     { upsert: true, new: true },
   );
@@ -212,6 +252,8 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
         lastMessageExternalId: input.externalId,
         lastMessageText: input.text,
         lastMessageFromMe: input.fromMe,
+        isGroup,
+        ...(input.fromMe || !input.senderName ? {} : { lastMessageSenderName: input.senderName }),
         ...(resolvedPhone ? { phoneNumber: resolvedPhone } : {}),
         ...(defaultSector ? { assignedSectorId: defaultSector.objectId } : {}),
       },
@@ -238,14 +280,16 @@ export async function saveMessages(
   instanceId: string,
   messages: SaasConversationMessage[],
   participantName?: string,
+  options: { chatId?: string; isGroup?: boolean } = {},
 ): Promise<void> {
   for (const message of messages) {
-    const chatId = normalizePhone(message.jid);
+    const chatId = options.chatId ?? messageChatIdFromApi(message);
+    const isGroup = options.isGroup ?? message.isGroup ?? isGroupJid(chatId);
     await saveMessage({
       instanceId,
       chatId,
       externalId: message.id,
-      jid: message.jid,
+      jid: message.chatJid ?? message.jid,
       fromMe: message.fromMe,
       text: message.text,
       type: message.type,
@@ -256,6 +300,9 @@ export async function saveMessages(
       mediaSize: message.mediaSize,
       mediaGridFsId: message.mediaGridFsId,
       participantName: participantName ?? chatId,
+      isGroup,
+      senderJid: message.senderJid,
+      senderName: message.senderName,
     });
   }
 }
@@ -372,6 +419,7 @@ export async function listConversations(
     return {
       chatId: doc.chatId,
       participantName: sanitizeParticipantName(doc.participantName, doc.chatId),
+      isGroup: doc.isGroup ?? isGroupJid(doc.chatId),
       lastMessage: {
         id: doc.lastMessageExternalId,
         jid: toJid(doc.chatId),
@@ -379,6 +427,9 @@ export async function listConversations(
         timestamp: doc.lastMessageAt.toISOString(),
         text: doc.lastMessageText,
         type: 'conversation',
+        isGroup: doc.isGroup ?? isGroupJid(doc.chatId),
+        chatJid: isGroupJid(doc.chatId) ? doc.chatId : undefined,
+        senderName: doc.lastMessageSenderName ?? undefined,
       },
       assignedSector: assignedSectorDoc
         ? { id: String(assignedSectorDoc._id), name: assignedSectorDoc.name }
@@ -483,11 +534,20 @@ export async function listMessages(
     .limit(limit + 1)
     .lean();
 
+  const conversation = await ChatConversation.findOne({
+    instanceId,
+    chatId: normalizedChatId,
+  })
+    .select('isGroup')
+    .lean();
+
+  const conversationIsGroup = conversation?.isGroup ?? isGroupJid(normalizedChatId);
+
   const hasMore = docs.length > limit;
   const page = (hasMore ? docs.slice(0, limit) : docs).reverse();
 
   return {
-    items: page.map((doc) => toSaasMessage(doc)),
+    items: page.map((doc) => toSaasMessage(doc, conversationIsGroup)),
     nextCursor: hasMore ? page[0]?.externalId ?? null : null,
   };
 }
@@ -502,40 +562,126 @@ export async function countMessages(instanceId: string, chatId: string): Promise
 export interface ResolvedIncomingIdentity {
   chatId: string;
   participantName: string;
+  senderId: string;
+  senderName?: string;
+  isGroup: boolean;
 }
 
 export async function resolveIncomingIdentity(
   payload: SaasIncomingMessageEvent,
   instanceId: string,
 ): Promise<ResolvedIncomingIdentity | null> {
-  const participantName = payload.to?.trim() || 'Desconhecido';
+  if (payload.isGroup && payload.chatJid) {
+    const chatId = payload.chatJid;
+    const senderId = resolveSenderId(payload.senderJid, payload.from);
+    const senderName = payload.to?.trim() || undefined;
 
+    const existing = await ChatConversation.findOne({ instanceId, chatId })
+      .select('participantName')
+      .lean();
+
+    const participantName =
+      existing?.participantName && !existing.participantName.startsWith('name:')
+        ? existing.participantName
+        : formatGroupDisplayName(chatId);
+
+    return {
+      chatId,
+      participantName,
+      senderId,
+      senderName,
+      isGroup: true,
+    };
+  }
+
+  const participantName = payload.to?.trim() || 'Desconhecido';
+  const chatJidPhone = payload.chatJid ? normalizePhone(payload.chatJid) : '';
   const fromPhone = normalizePhone(payload.from || '');
+
+  if (chatJidPhone && !isGroupJid(payload.chatJid ?? '')) {
+    return {
+      chatId: chatJidPhone,
+      participantName: payload.to ?? chatJidPhone,
+      senderId: chatJidPhone,
+      isGroup: false,
+    };
+  }
+
   if (fromPhone) {
-    return { chatId: fromPhone, participantName: payload.to ?? fromPhone };
+    return {
+      chatId: fromPhone,
+      participantName: payload.to ?? fromPhone,
+      senderId: fromPhone,
+      isGroup: false,
+    };
   }
 
   if (payload.jid) {
+    if (isGroupJid(payload.jid)) {
+      const senderId = resolveSenderId(payload.senderJid, payload.from);
+      return {
+        chatId: payload.jid,
+        participantName: formatGroupDisplayName(payload.jid),
+        senderId,
+        senderName: payload.to?.trim() || undefined,
+        isGroup: true,
+      };
+    }
+
     const jidPhone = normalizePhone(payload.jid);
     if (jidPhone) {
-      return { chatId: jidPhone, participantName: payload.to ?? jidPhone };
+      return {
+        chatId: jidPhone,
+        participantName: payload.to ?? jidPhone,
+        senderId: jidPhone,
+        isGroup: false,
+      };
+    }
+  }
+
+  if (payload.senderJid) {
+    const senderId = resolveSenderId(payload.senderJid, payload.from);
+    if (payload.chatJid && isGroupJid(payload.chatJid)) {
+      return {
+        chatId: payload.chatJid,
+        participantName: formatGroupDisplayName(payload.chatJid),
+        senderId,
+        senderName: payload.to?.trim() || undefined,
+        isGroup: true,
+      };
     }
   }
 
   if (payload.to) {
     const phoneFromContacts = await lookupChatIdByContactName(instanceId, payload.to);
     if (phoneFromContacts) {
-      return { chatId: phoneFromContacts, participantName: payload.to };
+      return {
+        chatId: phoneFromContacts,
+        participantName: payload.to,
+        senderId: phoneFromContacts,
+        isGroup: false,
+      };
     }
   }
 
   if (payload.to) {
-    return { chatId: nameAliasChatId(payload.to), participantName: payload.to };
+    const aliasId = nameAliasChatId(payload.to);
+    return {
+      chatId: aliasId,
+      participantName: payload.to,
+      senderId: aliasId,
+      isGroup: false,
+    };
   }
 
   const instanceFallback = normalizePhone(instanceId);
   if (instanceFallback) {
-    return { chatId: instanceFallback, participantName };
+    return {
+      chatId: instanceFallback,
+      participantName,
+      senderId: instanceFallback,
+      isGroup: false,
+    };
   }
 
   return null;
@@ -545,6 +691,7 @@ async function mergeNameAliasConversation(
   instanceId: string,
   identity: ResolvedIncomingIdentity,
 ): Promise<void> {
+  if (identity.isGroup || isGroupJid(identity.chatId)) return;
   if (identity.chatId.startsWith('name:') || !identity.participantName) return;
 
   const aliasChatId = nameAliasChatId(identity.participantName);
@@ -586,6 +733,8 @@ async function deduplicateNameAliasConversations(instanceId: string): Promise<vo
     await mergeNameAliasConversation(instanceId, {
       chatId: phoneConversation.chatId,
       participantName: alias.participantName,
+      senderId: phoneConversation.chatId,
+      isGroup: false,
     });
   }
 }
@@ -594,10 +743,17 @@ export function resolveIncomingChatId(
   payload: SaasIncomingMessageEvent,
   options: { instanceId?: string } = {},
 ): string | null {
+  if (payload.isGroup && payload.chatJid) return payload.chatJid;
+  if (payload.chatJid && isGroupJid(payload.chatJid)) return payload.chatJid;
+
+  const chatJidPhone = payload.chatJid ? normalizePhone(payload.chatJid) : '';
+  if (chatJidPhone) return chatJidPhone;
+
   const fromPhone = normalizePhone(payload.from || '');
   if (fromPhone) return fromPhone;
 
   if (payload.jid) {
+    if (isGroupJid(payload.jid)) return payload.jid;
     const jidPhone = normalizePhone(payload.jid);
     if (jidPhone) return jidPhone;
   }
@@ -634,9 +790,12 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
   const timestamp = String(source.timestamp ?? new Date().toISOString());
   const to = source.to == null ? null : String(source.to);
   const jid = source.jid == null ? undefined : String(source.jid);
+  const chatJid = source.chatJid == null ? undefined : String(source.chatJid);
+  const senderJid = source.senderJid == null ? undefined : String(source.senderJid);
+  const isGroup = source.isGroup === true || (chatJid ? isGroupJid(chatJid) : false);
   const media = parseIncomingMedia(source.media);
 
-  if (!messageId && !text && !from && !jid && !media) return null;
+  if (!messageId && !text && !from && !jid && !chatJid && !media) return null;
 
   return {
     messageId: messageId || `incoming-${Date.now()}`,
@@ -647,6 +806,9 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
     userId: String(source.userId ?? ''),
     instanceId,
     jid,
+    isGroup,
+    chatJid,
+    senderJid,
     media,
   };
 }
@@ -658,6 +820,8 @@ export interface InboundChatMessageEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  isGroup?: boolean;
+  senderName?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
   attachment?: {
     name: string;
@@ -754,7 +918,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
       instanceId,
       chatId: identity.chatId,
       externalId: payload.messageId,
-      jid: payload.jid,
+      jid: payload.chatJid ?? payload.jid ?? toJid(identity.chatId),
       fromMe: false,
       text,
       type: messageType,
@@ -764,6 +928,9 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
       mediaFileName,
       mediaSize,
       participantName: identity.participantName,
+      isGroup: identity.isGroup,
+      senderJid: payload.senderJid,
+      senderName: identity.senderName,
     });
   } catch (err) {
     console.error('[Chat] Erro ao persistir mensagem recebida:', err);
@@ -774,9 +941,11 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     id: payload.messageId,
     chatId: identity.chatId,
     text,
-    senderId: identity.chatId,
+    senderId: identity.senderId,
     timestamp: payload.timestamp,
-    fromName: identity.participantName,
+    fromName: identity.isGroup ? identity.senderName ?? null : identity.participantName,
+    isGroup: identity.isGroup,
+    senderName: identity.senderName,
     type: eventType,
     attachment,
   };
@@ -831,6 +1000,10 @@ async function lookupChatIdByContactName(
 export async function resolveOutboundPhone(instanceId: string, chatId: string): Promise<string> {
   const normalizedChatId = normalizeChatId(chatId);
 
+  if (isGroupJid(normalizedChatId)) {
+    throw new AppError(400, 'Envio de mensagens em grupos ainda não está disponível.');
+  }
+
   const directPhone = phoneFromChatId(normalizedChatId);
   if (directPhone) return directPhone;
 
@@ -859,6 +1032,8 @@ export async function resolveOutboundPhone(instanceId: string, chatId: string): 
       await mergeNameAliasConversation(instanceId, {
         chatId: phoneFromContacts,
         participantName: contactName,
+        senderId: phoneFromContacts,
+        isGroup: false,
       });
     }
 

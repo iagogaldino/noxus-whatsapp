@@ -42,6 +42,8 @@ const chatMessageSchema = new Schema(
     mediaFileName: String,
     mediaSize: Number,
     mediaGridFsId: String,
+    senderJid: String,
+    senderName: String,
   },
   {
     timestamps: true,

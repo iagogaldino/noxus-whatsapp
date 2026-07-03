@@ -17,6 +17,8 @@ import {
   fetchConversationMessages,
   fetchConversations,
   forwardConversation as forwardConversationApi,
+  formatGroupDisplayName,
+  isGroupJid,
   mapApiMessageToChat,
   normalizePhone,
   sendMessageRest,
@@ -54,6 +56,7 @@ function messageFromIncomingEvent(event: ChatMessageReceivedEvent): Message {
     chatId: event.chatId,
     text: event.text,
     senderId: event.senderId,
+    senderName: event.senderName,
     timestamp: new Date(event.timestamp),
     status: 'delivered',
     type: event.type ?? 'text',
@@ -140,6 +143,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const updated: Conversation = {
         id: chatId,
+        isGroup: existingConv?.isGroup,
         participant,
         lastMessage: message,
         unreadCount: existingConv?.unreadCount ?? 0,
@@ -180,9 +184,14 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { items } = await fetchConversations();
       const convs: Conversation[] = items.map((item) => {
-        const lastMessage = mapApiMessageToChat(item.lastMessage, currentUser.id);
+        const isGroup = item.isGroup ?? false;
+        const lastMessage = mapApiMessageToChat(item.lastMessage, currentUser.id, {
+          chatId: item.chatId,
+          isGroup,
+        });
         return {
           id: item.chatId,
+          isGroup,
           participant: {
             id: item.chatId,
             name: item.participantName,
@@ -198,7 +207,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMessagesByChat((prev) => {
         const next = { ...prev };
         for (const item of items) {
-          const message = mapApiMessageToChat(item.lastMessage, currentUser.id);
+          const isGroup = item.isGroup ?? false;
+          const message = mapApiMessageToChat(item.lastMessage, currentUser.id, {
+            chatId: item.chatId,
+            isGroup,
+          });
           const existing = next[item.chatId] ?? [];
           if (!existing.some((m) => m.id === message.id)) {
             next[item.chatId] = [...existing, message];
@@ -222,12 +235,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const existing = prev.find((c) => c.id === event.chatId);
         const participant: User = existing?.participant ?? {
           id: event.chatId,
-          name: event.fromName ?? event.chatId,
+          name: event.isGroup
+            ? formatGroupDisplayName(event.chatId)
+            : (event.fromName ?? event.chatId),
           avatarColor: pickAvatarColor(event.chatId),
         };
 
         const updated: Conversation = {
           id: event.chatId,
+          isGroup: event.isGroup ?? existing?.isGroup,
           participant,
           lastMessage: message,
           unreadCount: (existing?.unreadCount ?? 0) + 1,
@@ -423,8 +439,15 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       try {
         const response = await fetchConversationMessages(chatId, { limit: 50 });
+        const conversationMeta = conversationsRef.current.find((c) => c.id === chatId);
+        const isGroup =
+          (conversationMeta?.isGroup ?? isGroupJid(chatId)) ||
+          response.items.some((item) => item.isGroup);
         const messages = response.items.map((item) =>
-          mapApiMessageToChat(item, currentUser.id),
+          mapApiMessageToChat(item, currentUser.id, {
+            chatId,
+            isGroup: isGroup || item.isGroup,
+          }),
         );
 
         if (messages.length > 0) {
@@ -438,12 +461,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const existing = prev.find((c) => c.id === chatId);
             const participant: User = existing?.participant ?? {
               id: chatId,
-              name: chatId,
+              name: isGroup ? formatGroupDisplayName(chatId) : chatId,
               avatarColor: pickAvatarColor(chatId),
             };
 
             const updated: Conversation = {
               id: chatId,
+              isGroup,
               participant,
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
@@ -599,7 +623,11 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         URL.revokeObjectURL(objectUrl);
 
         const response = await fetchConversationMessages(chatId, { limit: 50 });
-        const messages = response.items.map((item) => mapApiMessageToChat(item, currentUser.id));
+        const existingConv = conversationsRef.current.find((c) => c.id === chatId);
+        const isGroup = existingConv?.isGroup ?? isGroupJid(chatId);
+        const messages = response.items.map((item) =>
+          mapApiMessageToChat(item, currentUser.id, { chatId, isGroup }),
+        );
 
         setMessagesByChat((prev) => ({
           ...prev,
@@ -612,12 +640,13 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const existing = prev.find((c) => c.id === chatId);
             const participant: User = existing?.participant ?? {
               id: chatId,
-              name: chatId,
+              name: isGroup ? formatGroupDisplayName(chatId) : chatId,
               avatarColor: pickAvatarColor(chatId),
             };
 
             const updated: Conversation = {
               id: chatId,
+              isGroup,
               participant,
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
