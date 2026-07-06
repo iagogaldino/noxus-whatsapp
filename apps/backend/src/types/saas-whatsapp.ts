@@ -91,6 +91,11 @@ export interface SaasIncomingMessageEvent {
   media?: SaasIncomingMedia;
 }
 
+export interface SaasSendMessageTarget {
+  phoneNumber?: string;
+  chatJid?: string;
+}
+
 export interface SaasSendMessageAck {
   ok?: boolean;
   error?: string;

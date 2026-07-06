@@ -40,6 +40,10 @@ const chatConversationSchema = new Schema(
       type: Boolean,
       default: false,
     },
+    outboundJid: {
+      type: String,
+      trim: true,
+    },
     phoneNumber: {
       type: String,
       trim: true,

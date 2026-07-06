@@ -4,7 +4,7 @@ import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
 import { resolveInstanceId } from '../services/saas-whatsapp.service.js';
-import { resolveOutboundPhone, saveMessage } from '../services/chat-persistence.service.js';
+import { resolveOutboundDestination, saveMessage } from '../services/chat-persistence.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -99,12 +99,15 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
 
       try {
         const instanceId = await resolveInstanceId();
-        const phoneNumber = await resolveOutboundPhone(instanceId, data.chatId);
-        const result = await whatsappSocketBridge.sendMessage(phoneNumber, trimmed);
+        const destination = await resolveOutboundDestination(instanceId, data.chatId);
+        const sendTarget = destination.chatJid
+          ? { chatJid: destination.chatJid }
+          : { phoneNumber: destination.phoneNumber! };
+        const result = await whatsappSocketBridge.sendMessage(sendTarget, trimmed);
         if (!result.ok) {
           console.error('[Chat] Falha ao enviar mensagem para o destinatário.', {
             chatId: data.chatId.trim(),
-            phoneNumber,
+            destination: destination.chatJid ?? destination.phoneNumber,
             userId: auth.userId,
             error: result.error ?? 'Falha ao enviar.',
           });
@@ -112,7 +115,7 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           return;
         }
 
-        const chatId = data.chatId.trim();
+        const chatId = destination.chatId;
         const sent: ChatMessageSentEvent = {
           id: result.messageId ?? `local-${Date.now()}`,
           chatId,
@@ -124,7 +127,8 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
 
         console.log('[Chat] Mensagem enviada com sucesso para o destinatário.', {
           chatId,
-          phoneNumber,
+          destination: destination.chatJid ?? destination.phoneNumber,
+          isGroup: destination.isGroup,
           messageId: sent.id,
           userId: auth.userId,
         });
@@ -136,6 +140,8 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           fromMe: true,
           text: sent.text,
           timestamp: sent.timestamp,
+          outboundJid: destination.chatJid,
+          isGroup: destination.isGroup,
         }).catch((err) => {
           console.error('[Chat] Erro ao persistir mensagem enviada:', err);
         });

@@ -61,7 +61,7 @@ export async function requestOtp(rawPhone: string): Promise<{ expiresInSeconds: 
   const message = `Seu código Noxustalk: ${code}. Válido por 5 minutos.`;
 
   try {
-    await saasWhatsApp.sendMessage(instanceId, phone, message);
+    await saasWhatsApp.sendMessage(instanceId, { phoneNumber: phone }, message);
   } catch (err) {
     await OtpChallenge.deleteOne({ phone });
     if (err instanceof AppError) {

@@ -7,7 +7,7 @@ async function resolveSaasConversationJid(instanceId: string, chatId: string): P
 
   const phone = chatPersistence.phoneFromChatId(chatId);
   if (phone) return phone;
-  return chatPersistence.resolveOutboundPhone(instanceId, chatId);
+  return chatPersistence.resolveOutboundSaasJid(instanceId, chatId);
 }
 
 export async function syncConversationFromSaas(

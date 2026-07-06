@@ -9,6 +9,7 @@ import type {
   SaasConversationSummary,
   SaasIncomingMedia,
   SaasIncomingMessageEvent,
+  SaasIncomingMessageReply,
 } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
 import { saveIncomingMedia, deleteMedia } from './chat-media-gridfs.service.js';
@@ -38,9 +39,44 @@ export function sanitizeParticipantName(
   return participantNameFromChatId(chatId) ?? name ?? chatId;
 }
 
-/** Preserva ids `name:*` e JIDs de grupo `@g.us`; telefones são normalizados para dígitos. */
+/** Preserva ids `name:*`, grupos `@g.us` e contas `@lid`. */
 export function isGroupJid(jid: string): boolean {
   return jid.endsWith('@g.us');
+}
+
+export function isLidJid(jid: string): boolean {
+  return jid.endsWith('@lid');
+}
+
+export function isSaasOutboundJid(jid: string): boolean {
+  return isGroupJid(jid) || isLidJid(jid) || jid.endsWith('@s.whatsapp.net');
+}
+
+export function lidChatId(jid: string): string {
+  return jid.split('@')[0]?.trim() || jid;
+}
+
+function conversationLookupIds(chatId: string): string[] {
+  const trimmed = chatId.trim();
+  const normalized = normalizeChatId(chatId);
+  const base = trimmed.split('@')[0] ?? normalized.split('@')[0] ?? trimmed;
+  const ids = new Set([trimmed, normalized, base]);
+  if (base) {
+    ids.add(`${base}@lid`);
+    ids.add(`${base}@g.us`);
+    ids.add(`${normalizePhone(base)}@s.whatsapp.net`);
+  }
+  if (isGroupJid(trimmed)) ids.add(trimmed);
+  if (isLidJid(trimmed)) ids.add(trimmed);
+  return [...ids];
+}
+
+async function findConversationRecord(instanceId: string, chatId: string) {
+  const lookupIds = conversationLookupIds(chatId);
+  return (
+    (await ChatConversation.findOne({ instanceId, chatId: { $in: lookupIds } }).lean()) ??
+    (await ChatConversation.findOne({ instanceId, outboundJid: { $in: lookupIds } }).lean())
+  );
 }
 
 export function formatGroupDisplayName(chatJid: string): string {
@@ -52,6 +88,7 @@ export function formatGroupDisplayName(chatJid: string): string {
 export function normalizeChatId(chatId: string): string {
   if (chatId.startsWith('name:')) return chatId;
   if (isGroupJid(chatId)) return chatId;
+  if (isLidJid(chatId)) return lidChatId(chatId);
   return normalizePhone(chatId) || chatId;
 }
 
@@ -71,6 +108,7 @@ export function phoneFromChatId(chatId: string): string | null {
 function toJid(chatId: string): string {
   if (chatId.startsWith('name:')) return `${chatId}@unknown`;
   if (isGroupJid(chatId)) return chatId;
+  if (isLidJid(chatId)) return chatId;
   return `${normalizePhone(chatId)}@s.whatsapp.net`;
 }
 
@@ -85,6 +123,7 @@ function messageChatIdFromApi(message: SaasConversationMessage): string {
   if (message.isGroup && message.chatJid) return message.chatJid;
   if (isGroupJid(message.jid)) return message.jid;
   if (message.chatJid && isGroupJid(message.chatJid)) return message.chatJid;
+  if (message.chatJid && isLidJid(message.chatJid)) return lidChatId(message.chatJid);
   return normalizePhone(message.chatJid ?? message.jid);
 }
 
@@ -106,6 +145,7 @@ export interface PersistMessageInput {
   isGroup?: boolean;
   senderJid?: string;
   senderName?: string;
+  outboundJid?: string;
 }
 
 function isAudioMedia(mimeType: string, fileName: string): boolean {
@@ -147,6 +187,22 @@ function parseIncomingMedia(raw: unknown): SaasIncomingMedia | undefined {
   };
 }
 
+export function parseIncomingReply(raw: unknown): SaasIncomingMessageReply | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+
+  const reply = raw as Record<string, unknown>;
+  const quotedMessageId = String(reply.quotedMessageId ?? '').trim();
+  if (!quotedMessageId) return undefined;
+
+  return {
+    quotedMessageId,
+    quotedParticipant:
+      reply.quotedParticipant == null ? null : String(reply.quotedParticipant),
+    quotedText: String(reply.quotedText ?? ''),
+    quotedType: String(reply.quotedType ?? 'conversation'),
+  };
+}
+
 function toSaasMessage(doc: {
   externalId: string;
   jid: string;
@@ -185,7 +241,12 @@ function toSaasMessage(doc: {
 export async function saveMessage(input: PersistMessageInput): Promise<void> {
   const chatId = normalizeChatId(input.chatId);
   const jid = input.jid ?? toJid(chatId);
-  const isGroup = input.isGroup ?? isGroupJid(chatId);
+  const outboundJid =
+    input.outboundJid ??
+    (isSaasOutboundJid(jid) && (isLidJid(jid) || isGroupJid(jid)) ? jid : undefined);
+  const isGroup =
+    input.isGroup ??
+    (outboundJid && isLidJid(outboundJid) ? false : isGroupJid(chatId));
   const timestamp = new Date(input.timestamp);
   const type = input.type ?? 'conversation';
 
@@ -253,6 +314,7 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
         lastMessageText: input.text,
         lastMessageFromMe: input.fromMe,
         isGroup,
+        ...(outboundJid ? { outboundJid } : {}),
         ...(input.fromMe || !input.senderName ? {} : { lastMessageSenderName: input.senderName }),
         ...(resolvedPhone ? { phoneNumber: resolvedPhone } : {}),
         ...(defaultSector ? { assignedSectorId: defaultSector.objectId } : {}),
@@ -613,20 +675,19 @@ export interface ResolvedIncomingIdentity {
   senderId: string;
   senderName?: string;
   isGroup: boolean;
+  outboundJid?: string;
 }
 
 export async function resolveIncomingIdentity(
   payload: SaasIncomingMessageEvent,
   instanceId: string,
 ): Promise<ResolvedIncomingIdentity | null> {
-  if (payload.isGroup && payload.chatJid) {
+  if (payload.isGroup && payload.chatJid && isGroupJid(payload.chatJid)) {
     const chatId = payload.chatJid;
     const senderId = resolveSenderId(payload.senderJid, payload.from);
     const senderName = payload.to?.trim() || undefined;
 
-    const existing = await ChatConversation.findOne({ instanceId, chatId })
-      .select('participantName')
-      .lean();
+    const existing = await findConversationRecord(instanceId, chatId);
 
     const participantName =
       existing?.participantName && !existing.participantName.startsWith('name:')
@@ -639,6 +700,29 @@ export async function resolveIncomingIdentity(
       senderId,
       senderName,
       isGroup: true,
+      outboundJid: chatId,
+    };
+  }
+
+  if (payload.chatJid && isLidJid(payload.chatJid)) {
+    const outboundJid = payload.chatJid;
+    const chatId = lidChatId(outboundJid);
+    const existing = await findConversationRecord(instanceId, chatId);
+
+    console.log('[Chat] Mensagem de conta empresarial (@lid) identificada.', {
+      messageId: payload.messageId,
+      chatJid: outboundJid,
+      senderJid: payload.senderJid,
+      participantName: payload.to,
+    });
+
+    return {
+      chatId: existing?.chatId ?? chatId,
+      participantName: payload.to?.trim() || existing?.participantName || 'Contato',
+      senderId: payload.senderJid?.trim() || outboundJid,
+      senderName: payload.to?.trim() || undefined,
+      isGroup: false,
+      outboundJid,
     };
   }
 
@@ -646,7 +730,7 @@ export async function resolveIncomingIdentity(
   const chatJidPhone = payload.chatJid ? normalizePhone(payload.chatJid) : '';
   const fromPhone = normalizePhone(payload.from || '');
 
-  if (chatJidPhone && !isGroupJid(payload.chatJid ?? '')) {
+  if (chatJidPhone && !isGroupJid(payload.chatJid ?? '') && !isLidJid(payload.chatJid ?? '')) {
     return {
       chatId: chatJidPhone,
       participantName: payload.to ?? chatJidPhone,
@@ -793,9 +877,10 @@ export function resolveIncomingChatId(
 ): string | null {
   if (payload.isGroup && payload.chatJid) return payload.chatJid;
   if (payload.chatJid && isGroupJid(payload.chatJid)) return payload.chatJid;
+  if (payload.chatJid && isLidJid(payload.chatJid)) return lidChatId(payload.chatJid);
 
   const chatJidPhone = payload.chatJid ? normalizePhone(payload.chatJid) : '';
-  if (chatJidPhone) return chatJidPhone;
+  if (chatJidPhone && !isLidJid(payload.chatJid ?? '')) return chatJidPhone;
 
   const fromPhone = normalizePhone(payload.from || '');
   if (fromPhone) return fromPhone;
@@ -842,6 +927,17 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
   const senderJid = source.senderJid == null ? undefined : String(source.senderJid);
   const isGroup = source.isGroup === true || (chatJid ? isGroupJid(chatJid) : false);
   const media = parseIncomingMedia(source.media);
+  const reply = parseIncomingReply(source.reply);
+
+  if (chatJid && isLidJid(chatJid)) {
+    console.log('[Chat] Mensagem recebida de conta empresarial (@lid).', {
+      messageId: messageId || undefined,
+      chatJid,
+      senderJid,
+      from: from || undefined,
+      participantName: to,
+    });
+  }
 
   if (!messageId && !text && !from && !jid && !chatJid && !media) return null;
 
@@ -858,6 +954,7 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
     chatJid,
     senderJid,
     media,
+    reply,
   };
 }
 
@@ -979,6 +1076,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
       isGroup: identity.isGroup,
       senderJid: payload.senderJid,
       senderName: identity.senderName,
+      outboundJid: identity.outboundJid,
     });
   } catch (err) {
     console.error('[Chat] Erro ao persistir mensagem recebida:', err);
@@ -1056,38 +1154,106 @@ async function lookupChatIdByContactName(
   );
 }
 
-export async function resolveOutboundPhone(instanceId: string, chatId: string): Promise<string> {
-  const normalizedChatId = normalizeChatId(chatId);
+export interface OutboundDestination {
+  chatId: string;
+  isGroup: boolean;
+  phoneNumber?: string;
+  chatJid?: string;
+}
 
-  if (isGroupJid(normalizedChatId)) {
-    throw new AppError(400, 'Envio de mensagens em grupos ainda não está disponível.');
+export async function resolveOutboundDestination(
+  instanceId: string,
+  chatId: string,
+): Promise<OutboundDestination> {
+  const normalizedChatId = normalizeChatId(chatId);
+  const conversation = await findConversationRecord(instanceId, normalizedChatId);
+  const resolvedChatId = conversation?.chatId ?? normalizedChatId;
+
+  if (conversation?.outboundJid && isSaasOutboundJid(conversation.outboundJid)) {
+    return {
+      chatId: resolvedChatId,
+      isGroup: isGroupJid(conversation.outboundJid),
+      chatJid: conversation.outboundJid,
+    };
   }
 
-  const directPhone = phoneFromChatId(normalizedChatId);
-  if (directPhone) return directPhone;
+  if (isGroupJid(normalizedChatId)) {
+    return { chatId: resolvedChatId, isGroup: true, chatJid: normalizedChatId };
+  }
 
-  const conversation = await ChatConversation.findOne({
+  if (isLidJid(normalizedChatId)) {
+    return { chatId: resolvedChatId, isGroup: false, chatJid: normalizedChatId };
+  }
+
+  const lidMessage = await ChatMessage.findOne({
     instanceId,
-    chatId: normalizedChatId,
-  }).lean();
+    chatId: { $in: conversationLookupIds(resolvedChatId) },
+    jid: /@lid$/,
+  })
+    .sort({ timestamp: -1 })
+    .select('jid chatId')
+    .lean();
+
+  if (lidMessage?.jid && isLidJid(lidMessage.jid)) {
+    if (conversation?.isGroup) {
+      await ChatConversation.updateOne(
+        { instanceId, chatId: resolvedChatId },
+        { $set: { isGroup: false, outboundJid: lidMessage.jid } },
+      );
+    }
+    return {
+      chatId: lidMessage.chatId,
+      isGroup: false,
+      chatJid: lidMessage.jid,
+    };
+  }
+
+  const groupMessage = await ChatMessage.findOne({
+    instanceId,
+    chatId: { $in: conversationLookupIds(resolvedChatId) },
+    jid: /@g\.us$/,
+  })
+    .sort({ timestamp: -1 })
+    .select('jid chatId')
+    .lean();
+
+  if (groupMessage?.jid && isGroupJid(groupMessage.jid)) {
+    return {
+      chatId: groupMessage.chatId,
+      isGroup: true,
+      chatJid: groupMessage.jid,
+    };
+  }
+
+  const directPhone = phoneFromChatId(resolvedChatId);
+  if (directPhone) {
+    return { chatId: resolvedChatId, isGroup: false, phoneNumber: directPhone };
+  }
 
   if (conversation?.phoneNumber && isValidPhone(conversation.phoneNumber)) {
-    return normalizePhone(conversation.phoneNumber);
+    return {
+      chatId: resolvedChatId,
+      isGroup: false,
+      phoneNumber: normalizePhone(conversation.phoneNumber),
+    };
   }
 
   const namesToTry = new Set<string>();
-  const fromConversation = sanitizeParticipantName(conversation?.participantName, normalizedChatId);
+  const fromConversation = sanitizeParticipantName(
+    conversation?.participantName,
+    resolvedChatId,
+  );
   if (fromConversation && !fromConversation.startsWith('name:')) {
     namesToTry.add(fromConversation);
   }
-  const fromChatId = participantNameFromChatId(normalizedChatId);
+  const fromChatId = participantNameFromChatId(resolvedChatId);
   if (fromChatId) namesToTry.add(fromChatId);
 
   for (const contactName of namesToTry) {
     const phoneFromContacts = await lookupChatIdByContactName(instanceId, contactName);
     if (!phoneFromContacts) continue;
 
-    if (normalizedChatId.startsWith('name:')) {
+    if (resolvedChatId.startsWith('name:')) {
       await mergeNameAliasConversation(instanceId, {
         chatId: phoneFromContacts,
         participantName: contactName,
@@ -1103,11 +1269,38 @@ export async function resolveOutboundPhone(instanceId: string, chatId: string): 
       );
     }
 
-    return phoneFromContacts;
+    return {
+      chatId: resolvedChatId,
+      isGroup: false,
+      phoneNumber: phoneFromContacts,
+    };
+  }
+
+  const fallbackLid = `${resolvedChatId}@lid`;
+  if (!isValidPhone(resolvedChatId) && resolvedChatId.length >= 10) {
+    return {
+      chatId: resolvedChatId,
+      isGroup: false,
+      chatJid: fallbackLid,
+    };
   }
 
   throw new AppError(
     400,
-    'Não foi possível resolver o número do contato. Verifique se o contato está na agenda do WhatsApp.',
+    'Não foi possível resolver o destino da mensagem. Verifique se o contato está na agenda do WhatsApp.',
   );
+}
+
+export async function resolveOutboundSaasJid(instanceId: string, chatId: string): Promise<string> {
+  const destination = await resolveOutboundDestination(instanceId, chatId);
+  if (destination.chatJid) return destination.chatJid;
+  if (destination.phoneNumber) return destination.phoneNumber;
+  throw new AppError(400, 'Não foi possível resolver o JID da conversa.');
+}
+
+export async function resolveOutboundPhone(instanceId: string, chatId: string): Promise<string> {
+  const destination = await resolveOutboundDestination(instanceId, chatId);
+  if (destination.phoneNumber) return destination.phoneNumber;
+  if (destination.chatJid) return destination.chatJid;
+  throw new AppError(400, 'Não foi possível resolver o destinatário da mensagem.');
 }

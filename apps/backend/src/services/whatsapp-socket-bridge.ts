@@ -1,6 +1,6 @@
 import { io as ioClient, Socket } from 'socket.io-client';
 import { env } from '../config/env.js';
-import type { SaasSendMessageAck } from '../types/saas-whatsapp.js';
+import type { SaasSendMessageAck, SaasSendMessageTarget } from '../types/saas-whatsapp.js';
 import {
   type InboundChatMessageEvent,
   persistIncomingMessage,
@@ -104,45 +104,54 @@ class WhatsAppSocketBridge {
   }
 
   sendMessage(
-    phoneNumber: string,
+    target: SaasSendMessageTarget,
     text: string,
   ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
     return new Promise((resolve) => {
       if (!this.saasSocket?.connected) {
-        console.warn('[WhatsApp Bridge] Envio falhou: socket não conectado.', {
-          phoneNumber: normalizePhone(phoneNumber),
-        });
+        console.warn('[WhatsApp Bridge] Envio falhou: socket não conectado.', { target });
         resolve({ ok: false, error: 'Socket WhatsApp não conectado.' });
         return;
       }
 
-      const normalized = normalizePhone(phoneNumber);
-      if (normalized.length < 10) {
-        console.warn('[WhatsApp Bridge] Envio falhou: destinatário inválido.', { phoneNumber });
-        resolve({ ok: false, error: 'Número do destinatário inválido.' });
+      const payload: SaasSendMessageTarget & { text: string } = { text };
+      if (target.chatJid?.trim()) {
+        payload.chatJid = target.chatJid.trim();
+      } else if (target.phoneNumber?.trim()) {
+        const normalized = normalizePhone(target.phoneNumber);
+        if (normalized.length < 10) {
+          console.warn('[WhatsApp Bridge] Envio falhou: telefone inválido.', { target });
+          resolve({ ok: false, error: 'Número do destinatário inválido.' });
+          return;
+        }
+        payload.phoneNumber = normalized;
+      } else {
+        console.warn('[WhatsApp Bridge] Envio falhou: destino ausente.', { target });
+        resolve({ ok: false, error: 'Destino da mensagem inválido.' });
         return;
       }
 
+      const destination = payload.chatJid ?? payload.phoneNumber;
       const timeout = setTimeout(() => {
-        console.error('[WhatsApp Bridge] Envio falhou: timeout.', { phoneNumber: normalized });
+        console.error('[WhatsApp Bridge] Envio falhou: timeout.', { destination });
         resolve({ ok: false, error: 'Timeout ao enviar mensagem.' });
       }, 15000);
 
       this.saasSocket.emit(
         'whatsapp.message.send',
-        { phoneNumber: normalized, text },
+        payload,
         (ack: SaasSendMessageAck) => {
           clearTimeout(timeout);
           if (ack?.ok === false || ack?.error) {
             console.error('[WhatsApp Bridge] Envio rejeitado pelo SaaS.', {
-              phoneNumber: normalized,
+              destination,
               error: ack?.error ?? 'Falha ao enviar.',
             });
             resolve({ ok: false, error: ack.error ?? 'Falha ao enviar.' });
             return;
           }
           console.log('[WhatsApp Bridge] Mensagem enviada com sucesso ao destinatário.', {
-            phoneNumber: normalized,
+            destination,
             messageId: ack?.messageId,
           });
           resolve({ ok: true, messageId: ack?.messageId });

@@ -242,25 +242,32 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     const instanceId = await saasWhatsApp.resolveInstanceId();
     const viewer = await getConversationViewer(req.auth!.userId);
 
-    const phoneNumber =
-      body.phoneNumber && saasWhatsApp.normalizePhone(body.phoneNumber).length >= 10
-        ? saasWhatsApp.normalizePhone(body.phoneNumber)
-        : await chatPersistence.resolveOutboundPhone(instanceId, body.chatId!);
+    const destination = body.phoneNumber && saasWhatsApp.normalizePhone(body.phoneNumber).length >= 10
+      ? {
+          chatId: chatPersistence.normalizeChatId(body.phoneNumber),
+          isGroup: false,
+          phoneNumber: saasWhatsApp.normalizePhone(body.phoneNumber),
+        }
+      : await chatPersistence.resolveOutboundDestination(instanceId, body.chatId!);
 
     const chatId = body.chatId?.trim()
       ? chatPersistence.normalizeChatId(body.chatId)
-      : phoneNumber;
+      : destination.chatId;
 
     if (body.chatId?.trim()) {
       await chatPersistence.assertConversationAccess(instanceId, chatId, viewer);
     }
 
-    await saasWhatsApp.sendMessage(instanceId, phoneNumber, body.message);
+    const sendTarget = destination.chatJid
+      ? { chatJid: destination.chatJid }
+      : { phoneNumber: destination.phoneNumber! };
+    await saasWhatsApp.sendMessage(instanceId, sendTarget, body.message);
 
     const messageId = `local-${Date.now()}`;
     console.log('[Chat] Mensagem enviada com sucesso para o destinatário (REST).', {
       chatId,
-      phoneNumber,
+      destination: destination.chatJid ?? destination.phoneNumber,
+      isGroup: destination.isGroup,
       messageId,
       userId: req.auth!.userId,
     });
@@ -271,6 +278,8 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
       fromMe: true,
       text: body.message,
       timestamp: new Date(),
+      outboundJid: destination.chatJid,
+      isGroup: destination.isGroup,
     });
 
     res.json({ ok: true, messageId });
