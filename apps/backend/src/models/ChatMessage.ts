@@ -44,6 +44,12 @@ const chatMessageSchema = new Schema(
     mediaGridFsId: String,
     senderJid: String,
     senderName: String,
+    reply: {
+      quotedMessageId: { type: String, trim: true },
+      quotedParticipant: { type: String, default: null },
+      quotedText: { type: String, default: '' },
+      quotedType: { type: String, default: 'conversation' },
+    },
   },
   {
     timestamps: true,

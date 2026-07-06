@@ -11,6 +11,12 @@ export interface ChatMessageReceivedEvent {
   isGroup?: boolean;
   senderName?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
+  reply?: {
+    quotedMessageId: string;
+    quotedParticipant: string | null;
+    quotedText: string;
+    quotedType: string;
+  };
   attachment?: {
     name: string;
     mimeType: string;

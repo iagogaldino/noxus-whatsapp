@@ -44,6 +44,7 @@ export interface SaasConversationMessage {
   chatJid?: string;
   senderJid?: string;
   senderName?: string;
+  reply?: SaasIncomingMessageReply;
   mediaUrl?: string;
   mediaMimeType?: string;
   mediaFileName?: string;

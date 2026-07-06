@@ -194,6 +194,9 @@ const ChatDetail: React.FC = () => {
                   showSenderName={
                     Boolean(conversation.isGroup) && item.message.senderId !== currentUser.id
                   }
+                  contactName={conversation.participant.name}
+                  contactId={conversation.id}
+                  isGroup={conversation.isGroup}
                 />
               ),
             )}

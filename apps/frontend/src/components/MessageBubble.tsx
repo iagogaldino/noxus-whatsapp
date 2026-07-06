@@ -7,14 +7,25 @@ import { FormattedMessageText } from '../utils/whatsappText';
 import ImageMessageContent from './ImageMessageContent';
 import FileMessageContent from './FileMessageContent';
 import AudioMessageContent from './AudioMessageContent';
+import MessageQuoteBlock from './MessageQuoteBlock';
 
 interface MessageBubbleProps {
   message: Message;
   isSent: boolean;
   showSenderName?: boolean;
+  contactName?: string;
+  contactId?: string;
+  isGroup?: boolean;
 }
 
-const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent, showSenderName }) => {
+const MessageBubble: React.FC<MessageBubbleProps> = ({
+  message,
+  isSent,
+  showSenderName,
+  contactName,
+  contactId,
+  isGroup,
+}) => {
   const type = getMessageType(message);
   const attachment = message.attachment;
   const hasCaption =
@@ -29,6 +40,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, isSent, showSend
       >
         {showSenderName && message.senderName && (
           <div className="wa-bubble__sender-name">{message.senderName}</div>
+        )}
+
+        {message.reply && (
+          <MessageQuoteBlock
+            reply={message.reply}
+            isSent={isSent}
+            contactName={contactName}
+            contactId={contactId}
+            senderName={message.senderName}
+            isGroup={isGroup}
+          />
         )}
 
         {type === 'image' && attachment && (

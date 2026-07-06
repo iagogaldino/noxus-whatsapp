@@ -62,6 +62,7 @@ function messageFromIncomingEvent(event: ChatMessageReceivedEvent): Message {
     timestamp: new Date(event.timestamp),
     status: 'delivered',
     type: event.type ?? 'text',
+    reply: event.reply,
     attachment: event.attachment
       ? {
           name: event.attachment.name,

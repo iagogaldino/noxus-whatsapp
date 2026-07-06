@@ -146,6 +146,7 @@ export interface PersistMessageInput {
   senderJid?: string;
   senderName?: string;
   outboundJid?: string;
+  reply?: SaasIncomingMessageReply;
 }
 
 function isAudioMedia(mimeType: string, fileName: string): boolean {
@@ -217,8 +218,25 @@ function toSaasMessage(doc: {
   mediaGridFsId?: string | null;
   senderJid?: string | null;
   senderName?: string | null;
+  reply?: {
+    quotedMessageId?: string | null;
+    quotedParticipant?: string | null;
+    quotedText?: string | null;
+    quotedType?: string | null;
+  } | null;
 }, conversationIsGroup?: boolean): SaasConversationMessage {
   const isGroup = conversationIsGroup ?? isGroupJid(doc.jid);
+  const reply =
+    doc.reply?.quotedMessageId != null && String(doc.reply.quotedMessageId).trim()
+      ? {
+          quotedMessageId: String(doc.reply.quotedMessageId),
+          quotedParticipant:
+            doc.reply.quotedParticipant == null ? null : String(doc.reply.quotedParticipant),
+          quotedText: String(doc.reply.quotedText ?? ''),
+          quotedType: String(doc.reply.quotedType ?? 'conversation'),
+        }
+      : undefined;
+
   return {
     id: doc.externalId,
     jid: doc.jid,
@@ -230,6 +248,7 @@ function toSaasMessage(doc: {
     chatJid: isGroup ? doc.jid : undefined,
     senderJid: doc.senderJid ?? undefined,
     senderName: doc.senderName ?? undefined,
+    reply,
     mediaUrl: doc.mediaUrl ?? undefined,
     mediaMimeType: doc.mediaMimeType ?? undefined,
     mediaFileName: doc.mediaFileName ?? undefined,
@@ -272,6 +291,18 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
     mediaUrl = existingMessage.mediaUrl;
   }
 
+  const reply = input.reply ?? (existingMessage?.reply?.quotedMessageId
+    ? {
+        quotedMessageId: String(existingMessage.reply.quotedMessageId),
+        quotedParticipant:
+          existingMessage.reply.quotedParticipant == null
+            ? null
+            : String(existingMessage.reply.quotedParticipant),
+        quotedText: String(existingMessage.reply.quotedText ?? ''),
+        quotedType: String(existingMessage.reply.quotedType ?? 'conversation'),
+      }
+    : undefined);
+
   await ChatMessage.findOneAndUpdate(
     { instanceId: input.instanceId, externalId: input.externalId },
     {
@@ -290,6 +321,7 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
       mediaGridFsId,
       ...(input.senderJid ? { senderJid: input.senderJid } : {}),
       ...(input.senderName ? { senderName: input.senderName } : {}),
+      ...(reply ? { reply } : {}),
     },
     { upsert: true, new: true },
   );
@@ -365,6 +397,7 @@ export async function saveMessages(
       isGroup,
       senderJid: message.senderJid,
       senderName: message.senderName,
+      reply: message.reply,
     });
   }
 }
@@ -968,6 +1001,7 @@ export interface InboundChatMessageEvent {
   isGroup?: boolean;
   senderName?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
+  reply?: SaasIncomingMessageReply;
   attachment?: {
     name: string;
     mimeType: string;
@@ -1077,6 +1111,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
       senderJid: payload.senderJid,
       senderName: identity.senderName,
       outboundJid: identity.outboundJid,
+      reply: payload.reply,
     });
   } catch (err) {
     console.error('[Chat] Erro ao persistir mensagem recebida:', err);
@@ -1091,6 +1126,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     isGroup: identity.isGroup,
     type: eventType,
     hasMedia: Boolean(attachment),
+    hasReply: Boolean(payload.reply),
     text: text.length > 120 ? `${text.slice(0, 120)}…` : text,
   });
 
@@ -1104,6 +1140,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     isGroup: identity.isGroup,
     senderName: identity.senderName,
     type: eventType,
+    reply: payload.reply,
     attachment,
   };
 }

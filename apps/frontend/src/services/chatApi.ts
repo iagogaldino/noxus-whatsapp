@@ -39,6 +39,12 @@ export interface ConversationMessagesResponse {
     chatJid?: string;
     senderJid?: string;
     senderName?: string;
+    reply?: {
+      quotedMessageId: string;
+      quotedParticipant: string | null;
+      quotedText: string;
+      quotedType: string;
+    };
     mediaUrl?: string;
     mediaMimeType?: string;
     mediaFileName?: string;
@@ -126,6 +132,7 @@ export function mapApiMessageToChat(
           size: msg.mediaSize ?? 0,
         }
       : undefined,
+    reply: msg.reply,
   };
 }
 

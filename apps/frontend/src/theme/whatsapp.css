@@ -914,6 +914,42 @@ ion-content.wa-home-bg::part(background) {
   padding: 4px 4px 0;
 }
 
+.wa-bubble__quote {
+  border-left: 4px solid #06cf9c;
+  border-radius: 6px;
+  padding: 4px 8px 4px 6px;
+  margin-bottom: 4px;
+  background: rgba(0, 0, 0, 0.05);
+  max-width: 100%;
+}
+
+.wa-bubble--sent .wa-bubble__quote {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.wa-bubble--received .wa-bubble__quote {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.wa-bubble__quote-author {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #06cf9c;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.wa-bubble__quote-text {
+  font-size: 0.8125rem;
+  color: var(--wa-text-secondary);
+  line-height: 1.35;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+}
+
 .wa-input-bar {
   display: flex;
   align-items: center;

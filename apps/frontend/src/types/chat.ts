@@ -17,6 +17,13 @@ export interface MessageAttachment {
   url: string;
 }
 
+export interface MessageReply {
+  quotedMessageId: string;
+  quotedParticipant: string | null;
+  quotedText: string;
+  quotedType: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
@@ -27,6 +34,7 @@ export interface Message {
   status?: MessageStatus;
   type?: MessageType;
   attachment?: MessageAttachment;
+  reply?: MessageReply;
 }
 
 export interface Conversation {

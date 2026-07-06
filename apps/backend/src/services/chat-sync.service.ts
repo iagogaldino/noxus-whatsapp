@@ -48,6 +48,7 @@ export async function syncConversationFromSaas(
           isGroup: message.isGroup ?? isGroup,
           senderJid: message.senderJid,
           senderName: message.senderName,
+          reply: message.reply,
         });
       }
 
