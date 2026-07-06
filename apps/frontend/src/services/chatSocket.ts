@@ -48,15 +48,22 @@ export interface ChatConversationForwardedEvent {
   assignedAt: string;
 }
 
+export interface ChatConversationUpdatedEvent {
+  chatId: string;
+  participantName: string;
+}
+
 type ReceivedListener = (event: ChatMessageReceivedEvent) => void;
 type SentListener = (event: ChatMessageSentEvent) => void;
 type ForwardedListener = (event: ChatConversationForwardedEvent) => void;
+type UpdatedListener = (event: ChatConversationUpdatedEvent) => void;
 
 class ChatSocketService {
   private socket: Socket | null = null;
   private receivedListeners = new Set<ReceivedListener>();
   private sentListeners = new Set<SentListener>();
   private forwardedListeners = new Set<ForwardedListener>();
+  private updatedListeners = new Set<UpdatedListener>();
 
   connect(): void {
     const token = getAuthToken();
@@ -94,6 +101,12 @@ class ChatSocketService {
         listener(event);
       }
     });
+
+    this.socket.on('chat:conversation:updated', (event: ChatConversationUpdatedEvent) => {
+      for (const listener of this.updatedListeners) {
+        listener(event);
+      }
+    });
   }
 
   disconnect(): void {
@@ -114,6 +127,11 @@ class ChatSocketService {
   onConversationForwarded(listener: ForwardedListener): () => void {
     this.forwardedListeners.add(listener);
     return () => this.forwardedListeners.delete(listener);
+  }
+
+  onConversationUpdated(listener: UpdatedListener): () => void {
+    this.updatedListeners.add(listener);
+    return () => this.updatedListeners.delete(listener);
   }
 
   sendMessage(

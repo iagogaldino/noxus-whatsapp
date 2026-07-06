@@ -1095,7 +1095,50 @@ async function refreshGenericGroupNames(
       }
     }),
   );
+
+  for (const [chatId, name] of updated) {
+    void emitConversationNameUpdated(chatId, name);
+  }
+
   return updated;
+}
+
+async function emitConversationNameUpdated(
+  chatId: string,
+  participantName: string,
+): Promise<void> {
+  try {
+    const { getNoxusSocketServer } = await import('../socket/noxus-socket.js');
+    getNoxusSocketServer()?.to('whatsapp-chat').emit('chat:conversation:updated', {
+      chatId,
+      participantName,
+    });
+  } catch {
+    /* socket ainda não inicializado */
+  }
+}
+
+async function upgradeGroupParticipantNameIfNeeded(
+  instanceId: string,
+  chatId: string,
+  currentName: string,
+): Promise<string> {
+  if (!isGroupJid(chatId) || !isGenericGroupLabel(currentName)) {
+    return currentName;
+  }
+
+  const { fetchGroupSubject } = await import('./saas-whatsapp.service.js');
+  const subject = await fetchGroupSubject(instanceId, chatId);
+  if (!subject || isGenericGroupLabel(subject)) {
+    return currentName;
+  }
+
+  await ChatConversation.updateOne(
+    { instanceId, chatId },
+    { $set: { participantName: subject } },
+  );
+  void emitConversationNameUpdated(chatId, subject);
+  return subject;
 }
 
 export interface InboundChatMessageEvent {
@@ -1226,6 +1269,12 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     console.error('[Chat] Erro ao persistir mensagem recebida:', err);
     return null;
   }
+
+  identity.participantName = await upgradeGroupParticipantNameIfNeeded(
+    instanceId,
+    identity.chatId,
+    identity.participantName,
+  );
 
   console.log('[Chat] Mensagem recebida e persistida com sucesso.', {
     messageId: payload.messageId,

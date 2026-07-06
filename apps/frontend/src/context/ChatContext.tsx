@@ -379,12 +379,28 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const unsubForwarded = chatSocket.onConversationForwarded(() => {
       void refreshConversations();
     });
+    const unsubUpdated = chatSocket.onConversationUpdated((event) => {
+      setConversations((prev) =>
+        prev.map((conv) =>
+          conv.id === event.chatId
+            ? {
+                ...conv,
+                participant: {
+                  ...conv.participant,
+                  name: event.participantName,
+                },
+              }
+            : conv,
+        ),
+      );
+    });
 
     return () => {
       cancelled = true;
       unsubReceived();
       unsubSent();
       unsubForwarded();
+      unsubUpdated();
       chatSocket.disconnect();
     };
   }, [session, isAdmin, refreshConversations, handleIncoming, handleEmployeeIncoming, handleSent]);
