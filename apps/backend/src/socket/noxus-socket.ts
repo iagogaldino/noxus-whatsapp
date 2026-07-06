@@ -56,6 +56,14 @@ function authenticateSocket(socket: Socket): AuthPayload | null {
 }
 
 async function handleIncomingMessage(event: ChatMessageReceivedEvent): Promise<void> {
+  console.log('[Chat] Repassando mensagem recebida ao frontend.', {
+    messageId: event.id,
+    chatId: event.chatId,
+    senderId: event.senderId,
+    senderName: event.senderName,
+    isGroup: event.isGroup,
+    type: event.type,
+  });
   io?.to('whatsapp-chat').emit('chat:message:received', event);
 }
 
@@ -94,6 +102,12 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
         const phoneNumber = await resolveOutboundPhone(instanceId, data.chatId);
         const result = await whatsappSocketBridge.sendMessage(phoneNumber, trimmed);
         if (!result.ok) {
+          console.error('[Chat] Falha ao enviar mensagem para o destinatário.', {
+            chatId: data.chatId.trim(),
+            phoneNumber,
+            userId: auth.userId,
+            error: result.error ?? 'Falha ao enviar.',
+          });
           ack?.({ ok: false, error: result.error ?? 'Falha ao enviar.' });
           return;
         }
@@ -107,6 +121,13 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           timestamp: new Date().toISOString(),
           status: 'sent',
         };
+
+        console.log('[Chat] Mensagem enviada com sucesso para o destinatário.', {
+          chatId,
+          phoneNumber,
+          messageId: sent.id,
+          userId: auth.userId,
+        });
 
         void saveMessage({
           instanceId,
@@ -124,6 +145,11 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
       } catch (err) {
         const message =
           err instanceof Error ? err.message : 'Falha ao enviar mensagem.';
+        console.error('[Chat] Erro inesperado ao enviar mensagem para o destinatário.', {
+          chatId: data.chatId?.trim(),
+          userId: auth.userId,
+          error: message,
+        });
         ack?.({ ok: false, error: message });
       }
     });

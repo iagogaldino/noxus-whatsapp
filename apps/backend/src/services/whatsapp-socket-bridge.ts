@@ -52,6 +52,7 @@ class WhatsAppSocketBridge {
     });
 
     this.saasSocket.on('whatsapp.message.received', (payload: unknown) => {
+      console.log('[WhatsApp Bridge] Evento whatsapp.message.received recebido do SaaS.');
       void this.handleIncomingMessage(payload);
     });
 
@@ -77,7 +78,13 @@ class WhatsAppSocketBridge {
     const event = await persistIncomingMessage(raw);
     if (!event) return;
 
-    console.log(`[Chat] Mensagem salva no banco (${event.chatId})`);
+    console.log('[WhatsApp Bridge] Mensagem recebida processada com sucesso.', {
+      messageId: event.id,
+      chatId: event.chatId,
+      senderId: event.senderId,
+      isGroup: event.isGroup,
+      type: event.type,
+    });
 
     for (const listener of this.messageListeners) {
       listener(event);
@@ -102,17 +109,22 @@ class WhatsAppSocketBridge {
   ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
     return new Promise((resolve) => {
       if (!this.saasSocket?.connected) {
+        console.warn('[WhatsApp Bridge] Envio falhou: socket não conectado.', {
+          phoneNumber: normalizePhone(phoneNumber),
+        });
         resolve({ ok: false, error: 'Socket WhatsApp não conectado.' });
         return;
       }
 
       const normalized = normalizePhone(phoneNumber);
       if (normalized.length < 10) {
+        console.warn('[WhatsApp Bridge] Envio falhou: destinatário inválido.', { phoneNumber });
         resolve({ ok: false, error: 'Número do destinatário inválido.' });
         return;
       }
 
       const timeout = setTimeout(() => {
+        console.error('[WhatsApp Bridge] Envio falhou: timeout.', { phoneNumber: normalized });
         resolve({ ok: false, error: 'Timeout ao enviar mensagem.' });
       }, 15000);
 
@@ -122,9 +134,17 @@ class WhatsAppSocketBridge {
         (ack: SaasSendMessageAck) => {
           clearTimeout(timeout);
           if (ack?.ok === false || ack?.error) {
+            console.error('[WhatsApp Bridge] Envio rejeitado pelo SaaS.', {
+              phoneNumber: normalized,
+              error: ack?.error ?? 'Falha ao enviar.',
+            });
             resolve({ ok: false, error: ack.error ?? 'Falha ao enviar.' });
             return;
           }
+          console.log('[WhatsApp Bridge] Mensagem enviada com sucesso ao destinatário.', {
+            phoneNumber: normalized,
+            messageId: ack?.messageId,
+          });
           resolve({ ok: true, messageId: ack?.messageId });
         },
       );

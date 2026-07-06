@@ -258,6 +258,12 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     await saasWhatsApp.sendMessage(instanceId, phoneNumber, body.message);
 
     const messageId = `local-${Date.now()}`;
+    console.log('[Chat] Mensagem enviada com sucesso para o destinatário (REST).', {
+      chatId,
+      phoneNumber,
+      messageId,
+      userId: req.auth!.userId,
+    });
     await chatPersistence.saveMessage({
       instanceId,
       chatId,

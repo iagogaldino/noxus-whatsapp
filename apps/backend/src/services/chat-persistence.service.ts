@@ -985,6 +985,17 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     return null;
   }
 
+  console.log('[Chat] Mensagem recebida e persistida com sucesso.', {
+    messageId: payload.messageId,
+    chatId: identity.chatId,
+    senderId: identity.senderId,
+    senderName: identity.senderName,
+    isGroup: identity.isGroup,
+    type: eventType,
+    hasMedia: Boolean(attachment),
+    text: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+  });
+
   return {
     id: payload.messageId,
     chatId: identity.chatId,
