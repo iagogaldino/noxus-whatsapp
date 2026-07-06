@@ -14,6 +14,7 @@ export interface ChatMessageReceivedEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  participantName?: string;
   isGroup?: boolean;
   senderName?: string;
   senderJid?: string;

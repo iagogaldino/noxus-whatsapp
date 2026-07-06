@@ -88,6 +88,8 @@ export interface SaasIncomingMessageEvent {
   isGroup?: boolean;
   chatJid?: string;
   senderJid?: string;
+  /** Nome/título do grupo quando a conversa é `@g.us`. */
+  chatName?: string;
   reply?: SaasIncomingMessageReply;
   media?: SaasIncomingMedia;
 }

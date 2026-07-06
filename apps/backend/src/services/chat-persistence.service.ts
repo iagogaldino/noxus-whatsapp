@@ -86,6 +86,54 @@ export function formatGroupDisplayName(chatJid: string): string {
   return `Grupo · …${suffix}`;
 }
 
+export function isGenericGroupLabel(name: string | undefined | null): boolean {
+  if (!name?.trim()) return true;
+  return /^Grupo · …/.test(name.trim());
+}
+
+function pickGroupParticipantName(
+  chatName: string | undefined,
+  existingName: string | undefined,
+  fallbackChatId: string,
+): string {
+  const fromPayload = chatName?.trim();
+  if (fromPayload && !isGenericGroupLabel(fromPayload)) return fromPayload;
+
+  const existing = existingName?.trim();
+  if (existing && !existing.startsWith('name:') && !isGenericGroupLabel(existing)) {
+    return existing;
+  }
+
+  if (fromPayload) return fromPayload;
+  return formatGroupDisplayName(fallbackChatId);
+}
+
+async function resolveGroupParticipantName(
+  instanceId: string,
+  chatId: string,
+  chatName: string | undefined,
+  existingName: string | undefined,
+): Promise<string> {
+  let name = pickGroupParticipantName(chatName, existingName, chatId);
+  if (isGenericGroupLabel(name)) {
+    const { fetchGroupSubject } = await import('./saas-whatsapp.service.js');
+    const subject = await fetchGroupSubject(instanceId, chatId);
+    if (subject) name = subject;
+  }
+  return name;
+}
+
+function shouldUpgradeParticipantName(
+  existing: string | undefined,
+  incoming: string | undefined,
+  chatId: string,
+): boolean {
+  if (!incoming?.trim()) return false;
+  if (!existing?.trim() || existing === chatId) return true;
+  if (isGenericGroupLabel(existing) && !isGenericGroupLabel(incoming)) return true;
+  return false;
+}
+
 export function normalizeChatId(chatId: string): string {
   if (chatId.startsWith('name:')) return chatId;
   if (isGroupJid(chatId)) return chatId;
@@ -356,13 +404,13 @@ export async function saveMessage(input: PersistMessageInput): Promise<void> {
     );
   } else if (needsDefaultSector && defaultSector) {
     existing.assignedSectorId = defaultSector.objectId;
-    if (input.participantName && existing.participantName === existing.chatId) {
-      existing.participantName = input.participantName;
+    if (shouldUpgradeParticipantName(existing.participantName, input.participantName, chatId)) {
+      existing.participantName = input.participantName!;
     }
     if (resolvedPhone) existing.phoneNumber = resolvedPhone;
     await existing.save();
-  } else if (input.participantName && existing.participantName === existing.chatId) {
-    existing.participantName = input.participantName;
+  } else if (shouldUpgradeParticipantName(existing.participantName, input.participantName, chatId)) {
+    existing.participantName = input.participantName!;
     if (resolvedPhone) existing.phoneNumber = resolvedPhone;
     await existing.save();
   } else if (resolvedPhone && !existing.phoneNumber) {
@@ -504,6 +552,8 @@ export async function listConversations(
     .populate('assignedSectorId', 'name')
     .lean();
 
+  const refreshedNames = await refreshGenericGroupNames(instanceId, docs);
+
   return docs.map((doc) => {
     const assignedSectorDoc =
       doc.assignedSectorId &&
@@ -514,7 +564,10 @@ export async function listConversations(
 
     return {
       chatId: doc.chatId,
-      participantName: sanitizeParticipantName(doc.participantName, doc.chatId),
+      participantName: sanitizeParticipantName(
+        refreshedNames.get(doc.chatId) ?? doc.participantName,
+        doc.chatId,
+      ),
       isGroup: doc.isGroup ?? isGroupJid(doc.chatId),
       lastMessage: {
         id: doc.lastMessageExternalId,
@@ -723,10 +776,12 @@ export async function resolveIncomingIdentity(
 
     const existing = await findConversationRecord(instanceId, chatId);
 
-    const participantName =
-      existing?.participantName && !existing.participantName.startsWith('name:')
-        ? existing.participantName
-        : formatGroupDisplayName(chatId);
+    const participantName = await resolveGroupParticipantName(
+      instanceId,
+      chatId,
+      payload.chatName,
+      existing?.participantName,
+    );
 
     return {
       chatId,
@@ -785,9 +840,16 @@ export async function resolveIncomingIdentity(
   if (payload.jid) {
     if (isGroupJid(payload.jid)) {
       const senderId = resolveSenderId(payload.senderJid, payload.from);
+      const existing = await findConversationRecord(instanceId, payload.jid);
+      const participantName = await resolveGroupParticipantName(
+        instanceId,
+        payload.jid,
+        payload.chatName,
+        existing?.participantName,
+      );
       return {
         chatId: payload.jid,
-        participantName: formatGroupDisplayName(payload.jid),
+        participantName,
         senderId,
         senderName: payload.to?.trim() || undefined,
         isGroup: true,
@@ -808,9 +870,16 @@ export async function resolveIncomingIdentity(
   if (payload.senderJid) {
     const senderId = resolveSenderId(payload.senderJid, payload.from);
     if (payload.chatJid && isGroupJid(payload.chatJid)) {
+      const existing = await findConversationRecord(instanceId, payload.chatJid);
+      const participantName = await resolveGroupParticipantName(
+        instanceId,
+        payload.chatJid,
+        payload.chatName,
+        existing?.participantName,
+      );
       return {
         chatId: payload.chatJid,
-        participantName: formatGroupDisplayName(payload.chatJid),
+        participantName,
         senderId,
         senderName: payload.to?.trim() || undefined,
         isGroup: true,
@@ -959,6 +1028,10 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
   const jid = source.jid == null ? undefined : String(source.jid);
   const chatJid = source.chatJid == null ? undefined : String(source.chatJid);
   const senderJid = source.senderJid == null ? undefined : String(source.senderJid);
+  const chatNameRaw =
+    source.chatName ?? source.groupName ?? source.groupSubject ?? source.subject;
+  const chatName =
+    chatNameRaw == null || chatNameRaw === '' ? undefined : String(chatNameRaw).trim() || undefined;
   const isGroup = source.isGroup === true || (chatJid ? isGroupJid(chatJid) : false);
   const media = parseIncomingMedia(source.media);
   const reply = parseIncomingReply(source.reply);
@@ -987,9 +1060,42 @@ export function parseIncomingPayload(raw: unknown): SaasIncomingMessageEvent | n
     isGroup,
     chatJid,
     senderJid,
+    chatName,
     media,
     reply,
   };
+}
+
+async function refreshGenericGroupNames(
+  instanceId: string,
+  docs: Array<{ chatId: string; participantName?: string; isGroup?: boolean }>,
+): Promise<Map<string, string>> {
+  const updated = new Map<string, string>();
+  const stale = docs
+    .filter(
+      (doc) => (doc.isGroup ?? isGroupJid(doc.chatId)) && isGenericGroupLabel(doc.participantName),
+    )
+    .slice(0, 8);
+
+  if (stale.length === 0) return updated;
+
+  const { fetchGroupSubject } = await import('./saas-whatsapp.service.js');
+  await Promise.all(
+    stale.map(async (doc) => {
+      try {
+        const subject = await fetchGroupSubject(instanceId, doc.chatId);
+        if (!subject) return;
+        await ChatConversation.updateOne(
+          { instanceId, chatId: doc.chatId },
+          { $set: { participantName: subject } },
+        );
+        updated.set(doc.chatId, subject);
+      } catch {
+        /* endpoint pode não existir em versões antigas do SaaS */
+      }
+    }),
+  );
+  return updated;
 }
 
 export interface InboundChatMessageEvent {
@@ -999,6 +1105,7 @@ export interface InboundChatMessageEvent {
   senderId: string;
   timestamp: string;
   fromName: string | null;
+  participantName?: string;
   isGroup?: boolean;
   senderName?: string;
   senderJid?: string;
@@ -1139,6 +1246,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     senderId: identity.senderId,
     timestamp: payload.timestamp,
     fromName: identity.isGroup ? identity.senderName ?? null : identity.participantName,
+    participantName: identity.participantName,
     isGroup: identity.isGroup,
     senderName: identity.senderName,
     senderJid: payload.senderJid,

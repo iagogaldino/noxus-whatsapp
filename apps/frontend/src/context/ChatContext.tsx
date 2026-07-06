@@ -18,7 +18,7 @@ import {
   fetchConversationMessages,
   fetchConversations,
   forwardConversation as forwardConversationApi,
-  formatGroupDisplayName,
+  resolveConversationDisplayName,
   isGroupJid,
   mapApiMessageToChat,
   normalizePhone,
@@ -237,18 +237,30 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setConversations((prev) => {
         const existing = prev.find((c) => c.id === event.chatId);
+        const isGroup = event.isGroup ?? existing?.isGroup ?? isGroupJid(event.chatId);
         const participant: User = existing?.participant ?? {
           id: event.chatId,
-          name: event.isGroup
-            ? formatGroupDisplayName(event.chatId)
-            : (event.fromName ?? event.chatId),
+          name: resolveConversationDisplayName(
+            event.chatId,
+            isGroup,
+            event.participantName ?? event.fromName,
+          ),
           avatarColor: pickAvatarColor(event.chatId),
         };
 
+        const resolvedName = resolveConversationDisplayName(
+          event.chatId,
+          isGroup,
+          event.participantName ?? participant.name,
+        );
+
         const updated: Conversation = {
           id: event.chatId,
-          isGroup: event.isGroup ?? existing?.isGroup,
-          participant,
+          isGroup,
+          participant: {
+            ...participant,
+            name: resolvedName,
+          },
           lastMessage: message,
           unreadCount: (existing?.unreadCount ?? 0) + 1,
           assignedSector: existing?.assignedSector ?? null,
@@ -471,14 +483,21 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const existing = prev.find((c) => c.id === chatId);
             const participant: User = existing?.participant ?? {
               id: chatId,
-              name: isGroup ? formatGroupDisplayName(chatId) : chatId,
+              name: resolveConversationDisplayName(
+                chatId,
+                isGroup,
+                existing?.participant.name,
+              ),
               avatarColor: pickAvatarColor(chatId),
             };
 
             const updated: Conversation = {
               id: chatId,
               isGroup,
-              participant,
+              participant: {
+                ...participant,
+                name: resolveConversationDisplayName(chatId, isGroup, participant.name),
+              },
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
               assignedSector: existing?.assignedSector ?? null,
@@ -664,14 +683,17 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const existing = prev.find((c) => c.id === chatId);
             const participant: User = existing?.participant ?? {
               id: chatId,
-              name: isGroup ? formatGroupDisplayName(chatId) : chatId,
+              name: resolveConversationDisplayName(chatId, isGroup, existing?.participant.name),
               avatarColor: pickAvatarColor(chatId),
             };
 
             const updated: Conversation = {
               id: chatId,
               isGroup,
-              participant,
+              participant: {
+                ...participant,
+                name: resolveConversationDisplayName(chatId, isGroup, participant.name),
+              },
               lastMessage,
               unreadCount: existing?.unreadCount ?? 0,
               assignedSector: existing?.assignedSector ?? null,

@@ -81,6 +81,22 @@ export function formatGroupDisplayName(chatJid: string): string {
   return `Grupo · …${suffix}`;
 }
 
+export function isGenericGroupLabel(name: string | undefined | null): boolean {
+  if (!name?.trim()) return true;
+  return /^Grupo · …/.test(name.trim());
+}
+
+export function resolveConversationDisplayName(
+  chatId: string,
+  isGroup: boolean,
+  participantName?: string | null,
+): string {
+  const trimmed = participantName?.trim();
+  if (trimmed && !isGenericGroupLabel(trimmed)) return trimmed;
+  if (isGroup) return formatGroupDisplayName(chatId);
+  return trimmed || chatId;
+}
+
 function resolveSenderId(
   msg: ConversationMessagesResponse['items'][number],
   conversationChatId: string,

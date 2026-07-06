@@ -23,10 +23,15 @@ export async function syncConversationFromSaas(
 
     if (saasMessages.items.length > 0) {
       const conversation = await chatPersistence.getConversation(instanceId, normalizedChatId);
-      const participantName = chatPersistence.sanitizeParticipantName(
+      let participantName = chatPersistence.sanitizeParticipantName(
         conversation?.participantName,
         normalizedChatId,
       );
+
+      if (isGroup && chatPersistence.isGenericGroupLabel(participantName)) {
+        const subject = await saasWhatsApp.fetchGroupSubject(instanceId, normalizedChatId);
+        if (subject) participantName = subject;
+      }
 
       for (const message of saasMessages.items) {
         await chatPersistence.saveMessage({

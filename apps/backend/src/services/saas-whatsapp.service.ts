@@ -142,6 +142,23 @@ export async function getContactProfilePhotoUrl(
   return data.url ?? null;
 }
 
+export async function fetchGroupSubject(
+  instanceId: string,
+  groupJid: string,
+): Promise<string | null> {
+  if (!groupJid.endsWith('@g.us')) return null;
+
+  try {
+    const { data } = await saasRequest<{ subject?: string | null; name?: string | null }>(
+      `${instancePath(instanceId)}/whatsapp/groups/${encodeURIComponent(groupJid)}`,
+    );
+    const subject = data.subject?.trim() || data.name?.trim();
+    return subject || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getConversations(
   instanceId: string,
   options: { limit?: number; viewer?: ConversationViewer } = {},
