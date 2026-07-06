@@ -4,7 +4,7 @@ import { Server, Socket } from 'socket.io';
 import { env } from '../config/env.js';
 import type { AuthPayload } from '../middleware/auth.middleware.js';
 import { resolveInstanceId } from '../services/saas-whatsapp.service.js';
-import { resolveOutboundDestination, saveMessage } from '../services/chat-persistence.service.js';
+import { resolveOutboundDestination, saveMessage, buildSaasReplyTo, type ClientReplyToInput } from '../services/chat-persistence.service.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
 export interface ChatMessageReceivedEvent {
@@ -16,6 +16,7 @@ export interface ChatMessageReceivedEvent {
   fromName: string | null;
   isGroup?: boolean;
   senderName?: string;
+  senderJid?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
   reply?: {
     quotedMessageId: string;
@@ -37,6 +38,12 @@ export interface ChatMessageSentEvent {
   senderId: string;
   timestamp: string;
   status: 'sent';
+  reply?: {
+    quotedMessageId: string;
+    quotedParticipant: string | null;
+    quotedText: string;
+    quotedType: string;
+  };
 }
 
 export interface ChatConversationForwardedEvent {
@@ -96,7 +103,12 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
     const auth = socket.data.auth as AuthPayload;
     socket.join('whatsapp-chat');
 
-    socket.on('chat:message:send', async (data: { chatId: string; text: string }, ack) => {
+    socket.on(
+      'chat:message:send',
+      async (
+        data: { chatId: string; text: string; replyTo?: ClientReplyToInput },
+        ack,
+      ) => {
       const trimmed = data.text?.trim();
       if (!trimmed || !data.chatId?.trim()) {
         ack?.({ ok: false, error: 'Dados inválidos.' });
@@ -109,11 +121,15 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
         const sendTarget = destination.chatJid
           ? { chatJid: destination.chatJid }
           : { phoneNumber: destination.phoneNumber! };
-        const result = await whatsappSocketBridge.sendMessage(sendTarget, trimmed);
+        const saasReplyTo = data.replyTo
+          ? buildSaasReplyTo(destination, data.replyTo)
+          : undefined;
+        const result = await whatsappSocketBridge.sendMessage(sendTarget, trimmed, saasReplyTo);
         if (!result.ok) {
           console.error('[Chat] Falha ao enviar mensagem para o destinatário.', {
             chatId: data.chatId.trim(),
             destination: destination.chatJid ?? destination.phoneNumber,
+            hasReplyTo: Boolean(saasReplyTo),
             userId: auth.userId,
             error: result.error ?? 'Falha ao enviar.',
           });
@@ -129,12 +145,21 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           senderId: auth.userId,
           timestamp: new Date().toISOString(),
           status: 'sent',
+          reply: saasReplyTo
+            ? {
+                quotedMessageId: saasReplyTo.messageId,
+                quotedParticipant: saasReplyTo.participant,
+                quotedText: saasReplyTo.text ?? '',
+                quotedType: 'conversation',
+              }
+            : undefined,
         };
 
         console.log('[Chat] Mensagem enviada com sucesso para o destinatário.', {
           chatId,
           destination: destination.chatJid ?? destination.phoneNumber,
           isGroup: destination.isGroup,
+          hasReplyTo: Boolean(saasReplyTo),
           messageId: sent.id,
           userId: auth.userId,
         });
@@ -148,6 +173,7 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
           timestamp: sent.timestamp,
           outboundJid: destination.chatJid,
           isGroup: destination.isGroup,
+          reply: sent.reply,
         }).catch((err) => {
           console.error('[Chat] Erro ao persistir mensagem enviada:', err);
         });
@@ -164,7 +190,8 @@ export function createNoxusSocketServer(httpServer: HttpServer): Server {
         });
         ack?.({ ok: false, error: message });
       }
-    });
+    },
+    );
   });
 
   whatsappSocketBridge.onMessageReceived((event) => {

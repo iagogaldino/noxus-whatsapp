@@ -11,11 +11,18 @@ import * as saasWhatsApp from '../services/saas-whatsapp.service.js';
 import { emitConversationForwarded } from '../socket/noxus-socket.js';
 import { whatsappSocketBridge } from '../services/whatsapp-socket-bridge.js';
 
+const replyToSchema = z.object({
+  messageId: z.string().min(1),
+  participant: z.string().nullable().optional(),
+  text: z.string().max(200).optional(),
+});
+
 const sendMessageSchema = z
   .object({
     phoneNumber: z.string().optional(),
     chatId: z.string().optional(),
     message: z.string().min(1).max(200),
+    replyTo: replyToSchema.optional(),
   })
   .refine(
     (data) => {
@@ -261,13 +268,26 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
     const sendTarget = destination.chatJid
       ? { chatJid: destination.chatJid }
       : { phoneNumber: destination.phoneNumber! };
-    await saasWhatsApp.sendMessage(instanceId, sendTarget, body.message);
+    const saasReplyTo = body.replyTo
+      ? chatPersistence.buildSaasReplyTo(destination, body.replyTo)
+      : undefined;
+    await saasWhatsApp.sendMessage(instanceId, sendTarget, body.message, saasReplyTo);
 
     const messageId = `local-${Date.now()}`;
+    const reply = saasReplyTo
+      ? {
+          quotedMessageId: saasReplyTo.messageId,
+          quotedParticipant: saasReplyTo.participant,
+          quotedText: saasReplyTo.text ?? '',
+          quotedType: 'conversation',
+        }
+      : undefined;
+
     console.log('[Chat] Mensagem enviada com sucesso para o destinatário (REST).', {
       chatId,
       destination: destination.chatJid ?? destination.phoneNumber,
       isGroup: destination.isGroup,
+      hasReplyTo: Boolean(saasReplyTo),
       messageId,
       userId: req.auth!.userId,
     });
@@ -280,6 +300,7 @@ export async function sendMessage(req: Request, res: Response, next: NextFunctio
       timestamp: new Date(),
       outboundJid: destination.chatJid,
       isGroup: destination.isGroup,
+      reply,
     });
 
     res.json({ ok: true, messageId });

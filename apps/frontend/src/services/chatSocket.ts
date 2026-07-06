@@ -1,4 +1,5 @@
 import { io, Socket } from 'socket.io-client';
+import type { MessageReplyTarget } from '../types/chat';
 import { API_BASE, getAuthToken } from './apiClient';
 
 export interface ChatMessageReceivedEvent {
@@ -10,6 +11,7 @@ export interface ChatMessageReceivedEvent {
   fromName: string | null;
   isGroup?: boolean;
   senderName?: string;
+  senderJid?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
   reply?: {
     quotedMessageId: string;
@@ -31,6 +33,12 @@ export interface ChatMessageSentEvent {
   senderId: string;
   timestamp: string;
   status: 'sent';
+  reply?: {
+    quotedMessageId: string;
+    quotedParticipant: string | null;
+    quotedText: string;
+    quotedType: string;
+  };
 }
 
 export interface ChatConversationForwardedEvent {
@@ -110,6 +118,7 @@ class ChatSocketService {
   sendMessage(
     chatId: string,
     text: string,
+    replyTo?: MessageReplyTarget,
   ): Promise<{ ok: boolean; error?: string; message?: ChatMessageSentEvent }> {
     return new Promise((resolve) => {
       if (!this.socket?.connected) {
@@ -123,7 +132,19 @@ class ChatSocketService {
 
       this.socket.emit(
         'chat:message:send',
-        { chatId, text },
+        {
+          chatId,
+          text,
+          ...(replyTo
+            ? {
+                replyTo: {
+                  messageId: replyTo.messageId,
+                  participant: replyTo.participant ?? null,
+                  text: replyTo.text,
+                },
+              }
+            : {}),
+        },
         (ack: { ok: boolean; error?: string; message?: ChatMessageSentEvent }) => {
           clearTimeout(timeout);
           resolve(ack ?? { ok: false, error: 'Sem resposta do servidor.' });

@@ -6,6 +6,7 @@ import type {
   SaasConversationSummary,
   SaasPairingStartResponse,
   SaasSendMessageTarget,
+  SaasSendReplyTo,
   SaasWhatsAppContact,
   SaasWhatsAppInstance,
   SaasWhatsAppQrResponse,
@@ -167,14 +168,18 @@ export async function sendMessage(
   instanceId: string,
   target: SaasSendMessageTarget,
   message: string,
+  replyTo?: SaasSendReplyTo,
 ): Promise<void> {
-  const body: SaasSendMessageTarget & { message: string } = { message };
+  const body: SaasSendMessageTarget & { message: string; replyTo?: SaasSendReplyTo } = { message };
   if (target.chatJid?.trim()) {
     body.chatJid = target.chatJid.trim();
   } else if (target.phoneNumber?.trim()) {
     body.phoneNumber = normalizePhone(target.phoneNumber);
   } else {
     throw new AppError(400, 'Informe phoneNumber ou chatJid para envio.');
+  }
+  if (replyTo) {
+    body.replyTo = replyTo;
   }
 
   await saasRequest(`/api/v1/auth/instances/${encodeURIComponent(instanceId)}/send-code`, {

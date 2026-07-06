@@ -1,4 +1,4 @@
-import type { Message, MessageType } from '../types/chat';
+import type { Message, MessageReplyTarget, MessageType } from '../types/chat';
 import {
   extractMediaFileName,
   normalizeMediaMessageText,
@@ -120,6 +120,7 @@ export function mapApiMessageToChat(
     chatId,
     text,
     senderId,
+    senderJid: msg.senderJid,
     senderName: msg.senderName,
     timestamp: new Date(msg.timestamp),
     status: msg.fromMe ? 'sent' : 'delivered',
@@ -204,10 +205,26 @@ export async function fetchConversationMessages(
   return authRequest<ConversationMessagesResponse>(path);
 }
 
-export async function sendMessageRest(chatId: string, message: string): Promise<void> {
+export async function sendMessageRest(
+  chatId: string,
+  message: string,
+  replyTo?: MessageReplyTarget,
+): Promise<void> {
   await authRequest('/api/v1/whatsapp/messages/send', {
     method: 'POST',
-    body: JSON.stringify({ chatId, message }),
+    body: JSON.stringify({
+      chatId,
+      message,
+      ...(replyTo
+        ? {
+            replyTo: {
+              messageId: replyTo.messageId,
+              participant: replyTo.participant ?? null,
+              text: replyTo.text,
+            },
+          }
+        : {}),
+    }),
   });
 }
 

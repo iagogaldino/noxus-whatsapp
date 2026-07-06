@@ -1,5 +1,28 @@
-import type { MessageReply } from '../types/chat';
+import type { Message, MessageReply, MessageReplyTarget } from '../types/chat';
 import { formatPhoneLabel } from './phone';
+
+export function canReplyToMessage(message: Message): boolean {
+  return !message.id.startsWith('client-') && !message.id.startsWith('local-');
+}
+
+export function buildReplyTarget(message: Message, authorName?: string): MessageReplyTarget {
+  const participant =
+    message.senderJid ??
+    (message.senderId.includes('@') ? message.senderId : message.senderId || null);
+
+  return {
+    messageId: message.id,
+    participant,
+    text: message.text,
+    authorName: authorName ?? message.senderName,
+  };
+}
+
+export function formatReplyDraftPreview(text: string, type?: string): string {
+  const trimmed = text.trim();
+  if (trimmed) return trimmed.length > 80 ? `${trimmed.slice(0, 80)}…` : trimmed;
+  return formatQuotedPreview('', type ?? 'conversation');
+}
 
 export function formatQuotedPreview(quotedText: string, quotedType: string): string {
   const text = quotedText.trim();

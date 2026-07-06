@@ -97,6 +97,19 @@ export interface SaasSendMessageTarget {
   chatJid?: string;
 }
 
+export interface SaasSendReplyTo {
+  messageId: string;
+  chatJid: string;
+  participant: string | null;
+  text?: string;
+}
+
+export interface SaasSendMessagePayload extends SaasSendMessageTarget {
+  message?: string;
+  text?: string;
+  replyTo?: SaasSendReplyTo;
+}
+
 export interface SaasSendMessageAck {
   ok?: boolean;
   error?: string;

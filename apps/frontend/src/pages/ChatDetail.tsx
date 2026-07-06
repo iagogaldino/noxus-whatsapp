@@ -11,6 +11,8 @@ import { useChat } from '../context/ChatContext';
 import { resolveRouteChatId } from '../utils/chatRoute';
 import { useAppNavigate } from '../utils/navigation';
 import { buildMessageListItems } from '../utils/message';
+import { buildReplyTarget } from '../utils/reply';
+import type { Message, MessageReplyTarget } from '../types/chat';
 
 const ChatDetail: React.FC = () => {
   const { id: routeId } = useParams<{ id: string }>();
@@ -33,6 +35,7 @@ const ChatDetail: React.FC = () => {
 
   const [forwardModalOpen, setForwardModalOpen] = useState(false);
   const [deleteAlertOpen, setDeleteAlertOpen] = useState(false);
+  const [replyTo, setReplyTo] = useState<MessageReplyTarget | null>(null);
   const [historyReadyFor, setHistoryReadyFor] = useState<string | undefined>(chatId);
 
   const justSwitchedChat = prevChatIdRef.current !== chatId;
@@ -79,6 +82,30 @@ const ChatDetail: React.FC = () => {
       }
     };
   }, [scrollToBottom]);
+
+  useEffect(() => {
+    setReplyTo(null);
+  }, [chatId]);
+
+  const handleReply = useCallback(
+    (message: Message) => {
+      if (!conversation) return;
+      const authorName = message.senderId === currentUser.id
+        ? 'você'
+        : (message.senderName ?? conversation.participant.name);
+      setReplyTo(buildReplyTarget(message, authorName));
+    },
+    [conversation, currentUser.id],
+  );
+
+  const handleSend = useCallback(
+    (text: string, reply?: MessageReplyTarget) => {
+      if (!conversation) return;
+      void sendMessage(conversation.id, text, reply);
+      setReplyTo(null);
+    },
+    [conversation, sendMessage],
+  );
 
   const handleDelete = useCallback(async () => {
     if (!resolvedChatId) return;
@@ -197,6 +224,7 @@ const ChatDetail: React.FC = () => {
                   contactName={conversation.participant.name}
                   contactId={conversation.id}
                   isGroup={conversation.isGroup}
+                  onReply={handleReply}
                 />
               ),
             )}
@@ -205,8 +233,10 @@ const ChatDetail: React.FC = () => {
       </IonContent>
       <IonFooter className="wa-footer">
         <MessageInput
-          onSend={(text) => void sendMessage(conversation.id, text)}
+          onSend={handleSend}
           onSendAttachment={(file, caption) => void sendAttachment(conversation.id, file, caption)}
+          replyTo={replyTo}
+          onCancelReply={() => setReplyTo(null)}
         />
       </IonFooter>
 

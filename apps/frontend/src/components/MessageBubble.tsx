@@ -1,5 +1,5 @@
 import { IonIcon } from '@ionic/react';
-import { alertCircleOutline, checkmarkDoneOutline, timeOutline } from 'ionicons/icons';
+import { alertCircleOutline, arrowUndoOutline, checkmarkDoneOutline, timeOutline } from 'ionicons/icons';
 import { Message } from '../types/chat';
 import { formatMessageTime } from '../utils/format';
 import { getMessageType, isMediaPlaceholderText } from '../utils/message';
@@ -8,6 +8,7 @@ import ImageMessageContent from './ImageMessageContent';
 import FileMessageContent from './FileMessageContent';
 import AudioMessageContent from './AudioMessageContent';
 import MessageQuoteBlock from './MessageQuoteBlock';
+import { canReplyToMessage } from '../utils/reply';
 
 interface MessageBubbleProps {
   message: Message;
@@ -16,6 +17,7 @@ interface MessageBubbleProps {
   contactName?: string;
   contactId?: string;
   isGroup?: boolean;
+  onReply?: (message: Message) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -25,14 +27,26 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
   contactName,
   contactId,
   isGroup,
+  onReply,
 }) => {
   const type = getMessageType(message);
   const attachment = message.attachment;
   const hasCaption =
     type !== 'text' && attachment && !isMediaPlaceholderText(message.text);
+  const canReply = Boolean(onReply && canReplyToMessage(message));
 
   return (
     <div className={`wa-message-row ${isSent ? 'wa-message-row--sent' : 'wa-message-row--received'}`}>
+      {canReply && (
+        <button
+          type="button"
+          className="wa-message-row__reply-btn"
+          onClick={() => onReply?.(message)}
+          aria-label="Responder mensagem"
+        >
+          <IonIcon icon={arrowUndoOutline} />
+        </button>
+      )}
       <div
         className={`wa-bubble ${isSent ? 'wa-bubble--sent' : 'wa-bubble--received'} ${
           type !== 'text' ? 'wa-bubble--media' : ''

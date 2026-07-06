@@ -1,6 +1,6 @@
 import { io as ioClient, Socket } from 'socket.io-client';
 import { env } from '../config/env.js';
-import type { SaasSendMessageAck, SaasSendMessageTarget } from '../types/saas-whatsapp.js';
+import type { SaasSendMessageAck, SaasSendMessageTarget, SaasSendReplyTo } from '../types/saas-whatsapp.js';
 import {
   type InboundChatMessageEvent,
   persistIncomingMessage,
@@ -106,6 +106,7 @@ class WhatsAppSocketBridge {
   sendMessage(
     target: SaasSendMessageTarget,
     text: string,
+    replyTo?: SaasSendReplyTo,
   ): Promise<{ ok: boolean; error?: string; messageId?: string }> {
     return new Promise((resolve) => {
       if (!this.saasSocket?.connected) {
@@ -114,7 +115,7 @@ class WhatsAppSocketBridge {
         return;
       }
 
-      const payload: SaasSendMessageTarget & { text: string } = { text };
+      const payload: SaasSendMessageTarget & { text: string; replyTo?: SaasSendReplyTo } = { text };
       if (target.chatJid?.trim()) {
         payload.chatJid = target.chatJid.trim();
       } else if (target.phoneNumber?.trim()) {
@@ -129,6 +130,10 @@ class WhatsAppSocketBridge {
         console.warn('[WhatsApp Bridge] Envio falhou: destino ausente.', { target });
         resolve({ ok: false, error: 'Destino da mensagem inválido.' });
         return;
+      }
+
+      if (replyTo) {
+        payload.replyTo = replyTo;
       }
 
       const destination = payload.chatJid ?? payload.phoneNumber;

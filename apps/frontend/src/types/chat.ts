@@ -24,11 +24,19 @@ export interface MessageReply {
   quotedType: string;
 }
 
+export interface MessageReplyTarget {
+  messageId: string;
+  participant?: string | null;
+  text?: string;
+  authorName?: string;
+}
+
 export interface Message {
   id: string;
   chatId: string;
   text: string;
   senderId: string;
+  senderJid?: string;
   senderName?: string;
   timestamp: Date;
   status?: MessageStatus;

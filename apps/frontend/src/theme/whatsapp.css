@@ -587,7 +587,10 @@ ion-content.wa-home-bg::part(background) {
 
 .wa-message-row {
   display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 2px;
+  position: relative;
 }
 
 .wa-message-row--sent {
@@ -596,6 +599,36 @@ ion-content.wa-home-bg::part(background) {
 
 .wa-message-row--received {
   justify-content: flex-start;
+}
+
+.wa-message-row__reply-btn {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--wa-text-secondary);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease, background 0.15s ease;
+}
+
+.wa-message-row:hover .wa-message-row__reply-btn,
+.wa-message-row:focus-within .wa-message-row__reply-btn {
+  opacity: 1;
+}
+
+.wa-message-row__reply-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--wa-text-primary);
+}
+
+.wa-message-row--sent .wa-message-row__reply-btn {
+  order: -1;
 }
 
 .wa-bubble {
@@ -948,6 +981,64 @@ ion-content.wa-home-bg::part(background) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   word-break: break-word;
+}
+
+.wa-input-bar-wrap {
+  background: #f0f2f5;
+}
+
+.wa-reply-draft {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  padding: 8px 12px 0;
+  background: #f0f2f5;
+}
+
+.wa-reply-draft__bar {
+  width: 4px;
+  border-radius: 4px;
+  background: #06cf9c;
+  flex-shrink: 0;
+}
+
+.wa-reply-draft__content {
+  flex: 1;
+  min-width: 0;
+}
+
+.wa-reply-draft__author {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #06cf9c;
+  line-height: 1.2;
+}
+
+.wa-reply-draft__text {
+  font-size: 0.8125rem;
+  color: var(--wa-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.wa-reply-draft__close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--wa-text-secondary);
+  cursor: pointer;
+}
+
+.wa-reply-draft__close:hover {
+  background: rgba(0, 0, 0, 0.06);
 }
 
 .wa-input-bar {

@@ -7,7 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { Conversation, Message, User } from '../types/chat';
+import { Conversation, Message, MessageReplyTarget, User } from '../types/chat';
 import {
   getAttachmentPreviewLabel,
   getMessagePreview,
@@ -58,6 +58,7 @@ function messageFromIncomingEvent(event: ChatMessageReceivedEvent): Message {
     chatId: event.chatId,
     text: event.text,
     senderId: event.senderId,
+    senderJid: event.senderJid,
     senderName: event.senderName,
     timestamp: new Date(event.timestamp),
     status: 'delivered',
@@ -88,7 +89,7 @@ interface ChatContextValue {
   isChatHistoryLoaded: (chatId: string) => boolean;
   loadChatHistory: (chatId: string) => Promise<void>;
   startConversation: (chatId: string, participantName: string) => void;
-  sendMessage: (chatId: string, text: string) => Promise<void>;
+  sendMessage: (chatId: string, text: string, replyTo?: MessageReplyTarget) => Promise<void>;
   sendAttachment: (chatId: string, file: File, caption?: string) => Promise<boolean>;
   markAsRead: (chatId: string) => void;
   forwardConversation: (chatId: string, sectorId: string) => Promise<{ success: boolean; error?: string }>;
@@ -286,6 +287,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       timestamp: new Date(event.timestamp),
       status: 'sent',
       type: 'text',
+      reply: event.reply,
     };
 
     setMessagesByChat((prev) => {
@@ -558,11 +560,19 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const sendMessage = useCallback(
-    async (chatId: string, text: string) => {
+    async (chatId: string, text: string, replyTo?: MessageReplyTarget) => {
       const trimmed = text.trim();
       if (!trimmed) return;
 
       const clientId = `client-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const optimisticReply = replyTo
+        ? {
+            quotedMessageId: replyTo.messageId,
+            quotedParticipant: replyTo.participant ?? null,
+            quotedText: replyTo.text ?? '',
+            quotedType: 'conversation',
+          }
+        : undefined;
 
       appendMessage({
         id: clientId,
@@ -572,9 +582,10 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
         timestamp: new Date(),
         status: 'pending',
         type: 'text',
+        reply: optimisticReply,
       });
 
-      const socketResult = await chatSocket.sendMessage(chatId, trimmed);
+      const socketResult = await chatSocket.sendMessage(chatId, trimmed, replyTo);
 
       if (socketResult.ok) {
         draftChatIdsRef.current.delete(chatId);
@@ -583,6 +594,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: socketResult.message.id,
             status: 'sent',
             timestamp: new Date(socketResult.message.timestamp),
+            reply: socketResult.message.reply ?? optimisticReply,
           });
         } else {
           updateMessage(chatId, clientId, { status: 'sent' });
@@ -591,7 +603,7 @@ export const ChatProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       try {
-        await sendMessageRest(chatId, trimmed);
+        await sendMessageRest(chatId, trimmed, replyTo);
         draftChatIdsRef.current.delete(chatId);
         updateMessage(chatId, clientId, { status: 'sent' });
       } catch {

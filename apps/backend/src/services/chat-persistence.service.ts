@@ -10,6 +10,7 @@ import type {
   SaasIncomingMedia,
   SaasIncomingMessageEvent,
   SaasIncomingMessageReply,
+  SaasSendReplyTo,
 } from '../types/saas-whatsapp.js';
 import { normalizePhone } from './saas-whatsapp.service.js';
 import { saveIncomingMedia, deleteMedia } from './chat-media-gridfs.service.js';
@@ -1000,6 +1001,7 @@ export interface InboundChatMessageEvent {
   fromName: string | null;
   isGroup?: boolean;
   senderName?: string;
+  senderJid?: string;
   type?: 'text' | 'image' | 'file' | 'audio';
   reply?: SaasIncomingMessageReply;
   attachment?: {
@@ -1139,6 +1141,7 @@ export async function persistIncomingMessage(raw: unknown): Promise<InboundChatM
     fromName: identity.isGroup ? identity.senderName ?? null : identity.participantName,
     isGroup: identity.isGroup,
     senderName: identity.senderName,
+    senderJid: payload.senderJid,
     type: eventType,
     reply: payload.reply,
     attachment,
@@ -1196,6 +1199,60 @@ export interface OutboundDestination {
   isGroup: boolean;
   phoneNumber?: string;
   chatJid?: string;
+}
+
+export interface ClientReplyToInput {
+  messageId: string;
+  participant?: string | null;
+  text?: string;
+}
+
+function normalizeReplyParticipant(
+  participant: string | null | undefined,
+  destination: OutboundDestination,
+): string | null {
+  const trimmed = participant?.trim();
+  if (!trimmed) {
+    return destination.isGroup ? null : destination.chatJid ?? null;
+  }
+  if (trimmed.includes('@')) return trimmed;
+
+  const digits = normalizePhone(trimmed);
+  if (!digits) return trimmed;
+
+  if (destination.chatJid && isLidJid(destination.chatJid) && lidChatId(destination.chatJid) === digits) {
+    return destination.chatJid;
+  }
+
+  return `${digits}@s.whatsapp.net`;
+}
+
+export function buildSaasReplyTo(
+  destination: OutboundDestination,
+  replyTo: ClientReplyToInput,
+): SaasSendReplyTo {
+  const messageId = replyTo.messageId.trim();
+  if (!messageId) {
+    throw new AppError(400, 'replyTo.messageId é obrigatório.');
+  }
+
+  const chatJid =
+    destination.chatJid ??
+    (destination.phoneNumber ? `${destination.phoneNumber}@s.whatsapp.net` : '');
+
+  if (!chatJid) {
+    throw new AppError(400, 'Não foi possível resolver o chatJid para a resposta.');
+  }
+
+  const participant = normalizeReplyParticipant(replyTo.participant, destination);
+  const text = replyTo.text?.trim();
+
+  return {
+    messageId,
+    chatJid,
+    participant,
+    ...(text ? { text } : {}),
+  };
 }
 
 export async function resolveOutboundDestination(
